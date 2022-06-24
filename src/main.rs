@@ -100,6 +100,8 @@ enum MemberCommand {
 enum ProposalCommand {
     /// Create an add proposal
     Add { key_package: String },
+    /// Create a remove proposal
+    Remove { key_package_ref: String },
 }
 
 fn path_reader(path: &str) -> io::Result<Box<dyn Read>> {
@@ -315,6 +317,22 @@ fn main() {
             };
             let message =
                 group.propose_add_member(&backend, &key_package).unwrap();
+            message.tls_serialize(&mut io::stdout()).unwrap();
+        }
+        Command::Proposal {
+            group,
+            command: ProposalCommand::Remove { key_package_ref },
+        } => {
+            let key_package_ref = hash_ref::HashReference::from_slice(
+                &base64::decode(key_package_ref).unwrap(),
+            );
+            let mut group = {
+                let data = path_reader(&group).unwrap();
+                MlsGroup::load(data).unwrap()
+            };
+            let message = group
+                .propose_remove_member(&backend, &key_package_ref)
+                .unwrap();
             message.tls_serialize(&mut io::stdout()).unwrap();
         }
     }
