@@ -55,10 +55,21 @@ enum Command {
     },
     Proposal {
         #[clap(short, long)]
-        group: String,
+        group_in: String,
+        #[clap(long)]
+        group_out: Option<String>,
+        #[clap(short, long, conflicts_with = "group-out")]
+        in_place: bool,
         #[clap(subcommand)]
         command: ProposalCommand,
     },
+    /// Create a commit that references all propsals that are pending
+    Commit {
+        #[clap(short, long)]
+        group: String,
+        #[clap(short, long)]
+        welcome_out: Option<String>
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -304,7 +315,9 @@ fn main() {
             message.tls_serialize(&mut io::stdout()).unwrap();
         }
         Command::Proposal {
-            group,
+            group_in,
+            group_out,
+            in_place,
             command: ProposalCommand::Add { key_package },
         } => {
             let key_package = {
@@ -312,28 +325,58 @@ fn main() {
                 KeyPackage::tls_deserialize(&mut data).unwrap()
             };
             let mut group = {
-                let data = path_reader(&group).unwrap();
+                let data = path_reader(&group_in).unwrap();
                 MlsGroup::load(data).unwrap()
             };
             let message =
                 group.propose_add_member(&backend, &key_package).unwrap();
             message.tls_serialize(&mut io::stdout()).unwrap();
+
+            let group_out = if in_place { Some(group_in) } else { group_out };
+            if let Some(group_out) = group_out {
+                let mut writer = fs::File::create(group_out).unwrap();
+                group.save(&mut writer).unwrap();
+            }
         }
         Command::Proposal {
-            group,
+            group_in,
+            group_out,
+            in_place,
             command: ProposalCommand::Remove { key_package_ref },
         } => {
             let key_package_ref = hash_ref::HashReference::from_slice(
                 &base64::decode(key_package_ref).unwrap(),
             );
             let mut group = {
-                let data = path_reader(&group).unwrap();
+                let data = path_reader(&group_in).unwrap();
                 MlsGroup::load(data).unwrap()
             };
             let message = group
                 .propose_remove_member(&backend, &key_package_ref)
                 .unwrap();
             message.tls_serialize(&mut io::stdout()).unwrap();
+
+            let group_out = if in_place { Some(group_in) } else { group_out };
+            if let Some(group_out) = group_out {
+                let mut writer = fs::File::create(group_out).unwrap();
+                group.save(&mut writer).unwrap();
+            }
+        }
+        Command::Commit {group, welcome_out} => {
+            let mut group = {
+                let data = path_reader(&group).unwrap();
+                MlsGroup::load(data).unwrap()
+            };
+
+            let (message, welcome) = group.commit_to_pending_proposals(&backend).unwrap();
+            message.tls_serialize(&mut io::stdout()).unwrap();
+
+            if let Some(welcome_out) = welcome_out {
+                if let Some(welcome) = welcome {
+                    let mut writer = fs::File::create(welcome_out).unwrap();
+                    welcome.tls_serialize(&mut writer).unwrap();
+                }
+            }
         }
     }
 }
