@@ -105,6 +105,17 @@ enum MemberCommand {
         #[clap(short, long, conflicts_with = "group-out")]
         in_place: bool,
     },
+    Remove {
+        #[clap(short, long)]
+        group: String,
+        key_packages: Vec<String>,
+        #[clap(short, long)]
+        welcome_out: Option<String>,
+        #[clap(long)]
+        group_out: Option<String>,
+        #[clap(short, long, conflicts_with = "group-out")]
+        in_place: bool,
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -305,6 +316,49 @@ fn main() {
             }
             handshake.tls_serialize(&mut io::stdout()).unwrap();
         }
+        Command::Member {
+            command:
+                MemberCommand::Remove {
+                    group: group_in,
+                    key_packages,
+                    welcome_out,
+                    group_out,
+                    in_place,
+                },
+        } => {
+            let mut group = {
+                let data = path_reader(&group_in).unwrap();
+                MlsGroup::load(data).unwrap()
+            };
+
+            let kprefs = key_packages
+                .into_iter()
+                .map(|filename| {
+                    let mut data = path_reader(&filename).expect(&format!(
+                        "Could not open key package file: {}",
+                        filename
+                    ));
+                    let kp = KeyPackage::tls_deserialize(&mut data).unwrap();
+                    kp.hash_ref(backend.crypto()).unwrap()
+                })
+                .collect::<Vec<_>>();
+
+            let (commit, welcome) = group.remove_members(&backend, kprefs.as_slice()).unwrap();
+
+            let group_out = if in_place { Some(group_in) } else { group_out };
+            if let Some(group_out) = group_out {
+                let mut writer = fs::File::create(group_out).unwrap();
+                group.merge_pending_commit().unwrap();
+                group.save(&mut writer).unwrap();
+            }
+
+            if let Some(welcome_out) = welcome_out {
+                let mut writer = fs::File::create(welcome_out).unwrap();
+                welcome.tls_serialize(&mut writer).unwrap();
+            }
+
+            commit.tls_serialize(&mut io::stdout()).unwrap();
+        },
         Command::Message { group, text } => {
             let mut group = {
                 let data = path_reader(&group).unwrap();
