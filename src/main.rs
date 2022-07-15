@@ -67,6 +67,16 @@ enum Command {
         #[clap(subcommand)]
         command: ProposalCommand,
     },
+    ExternalProposal {
+        #[clap(short, long)]
+        group_in: String,
+        #[clap(long)]
+        group_out: Option<String>,
+        #[clap(short, long, conflicts_with = "group-out")]
+        in_place: bool,
+        #[clap(subcommand)]
+        command: ExternalProposalCommand,
+    },
     /// Create a commit that references all propsals that are pending
     Commit {
         #[clap(short, long)]
@@ -144,6 +154,12 @@ enum ProposalCommand {
     Add { key_package: String },
     /// Create a remove proposal
     Remove { key_package_ref: String },
+}
+
+#[derive(Subcommand, Debug)]
+enum ExternalProposalCommand {
+    /// Create an add proposal
+    Add { key_package: String }
 }
 
 fn path_reader(path: &str) -> io::Result<Box<dyn Read>> {
@@ -464,6 +480,34 @@ fn main() {
                 let mut writer = fs::File::create(group_out).unwrap();
                 group.save(&mut writer).unwrap();
             }
+        }
+        Command::ExternalProposal {
+            group_in,
+            group_out,
+            in_place,
+            command: ExternalProposalCommand::Add { key_package }
+        } => {
+            let mut group = {
+                let data = path_reader(&group_in).unwrap();
+                MlsGroup::load(data).unwrap()
+            };
+
+            let credential = get_credential_bundle(&backend);
+
+            let key_package = {
+                let mut data = path_reader(&key_package).unwrap();
+                KeyPackage::tls_deserialize(&mut data).unwrap()
+            };
+
+            let external_proposal = ExternalProposal::new_add(key_package, group.group_id().clone(), group.epoch(), &credential, &backend).unwrap();
+
+            let group_out = if in_place { Some(group_in) } else { group_out };
+            if let Some(group_out) = group_out {
+                let mut writer = fs::File::create(group_out).unwrap();
+                group.save(&mut writer).unwrap();
+            }
+
+            external_proposal.tls_serialize(&mut io::stdout()).unwrap();
         }
         Command::Commit {group, welcome_out} => {
             let mut group = {
