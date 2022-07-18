@@ -85,6 +85,12 @@ enum Command {
         #[clap(short, long)]
         welcome_out: Option<String>,
     },
+    CheckSignature {
+        #[clap(short, long)]
+        group: String,
+        #[clap(short, long)]
+        message: String
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -524,6 +530,25 @@ fn main() {
                         welcome.tls_serialize(&mut writer).unwrap();
                     }
                 }
+            }
+            Command::CheckSignature { group, message } => {
+                let mut group = {
+                    let data = path_reader(&group).unwrap();
+                    MlsGroup::load(data).unwrap()
+                };
+
+                let cred_bundle = get_credential_bundle(&backend).await;
+                let public_key = match cred_bundle.credential().credential {
+                    MlsCredentialType::Basic(cred) => {
+
+                    }
+                };
+
+                let mut mdata = path_reader(&message).unwrap();
+                let msg_in = MlsMessageIn::tls_deserialize(&mut mdata).unwrap();
+
+                let unverified_message = group.parse_message(msg_in, &backend).unwrap();
+                group.process_unverified_message(unverified_message, None, &backend).await.unwrap();
             }
         }
     })
