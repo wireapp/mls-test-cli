@@ -1,6 +1,8 @@
+use async_trait::async_trait;
 use openmls::prelude::*;
 use openmls_traits::key_store::{FromKeyStoreValue, ToKeyStoreValue};
 
+use std::fmt::Display;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -23,12 +25,14 @@ impl TestKeyStore {
     }
 }
 
+impl std::error::Error for TestKeyStoreError {}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TestKeyStoreError(String);
 
-impl Into<String> for TestKeyStoreError {
-    fn into(self) -> String {
-        self.0
+impl Display for TestKeyStoreError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -44,22 +48,23 @@ impl From<std::io::Error> for TestKeyStoreError {
     }
 }
 
+#[async_trait]
 impl OpenMlsKeyStore for TestKeyStore {
     type Error = TestKeyStoreError;
 
-    fn store<V: ToKeyStoreValue>(&self, k: &[u8], v: &V) -> Result<(), Self::Error> {
+    async fn store<V: ToKeyStoreValue>(&self, k: &[u8], v: &V) -> Result<(), Self::Error> {
         let mut file = std::fs::File::create(self.key_path(k))?;
-        let value = v.to_key_store_value().map_err(|e| e.into())?;
-        file.write(&value)?;
+        let value = v.to_key_store_value().map_err(|e| e.to_string())?;
+        file.write_all(&value)?;
         Ok(())
     }
 
-    fn read<V: FromKeyStoreValue>(&self, k: &[u8]) -> Option<V> {
+    async fn read<V: FromKeyStoreValue>(&self, k: &[u8]) -> Option<V> {
         let buf = std::fs::read(self.key_path(k)).ok()?;
         V::from_key_store_value(&buf).ok()
     }
 
-    fn delete(&self, k: &[u8]) -> Result<(), Self::Error> {
+    async fn delete<V: ToKeyStoreValue>(&self, k: &[u8]) -> Result<(), Self::Error> {
         std::fs::remove_file(self.key_path(k))?;
         Ok(())
     }
