@@ -89,8 +89,8 @@ enum Command {
         #[clap(short, long)]
         group: String,
         #[clap(short, long)]
-        message: String
-    }
+        message: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -538,17 +538,16 @@ fn main() {
                 };
 
                 let cred_bundle = get_credential_bundle(&backend).await;
-                let public_key = match cred_bundle.credential().credential {
-                    MlsCredentialType::Basic(cred) => {
-
-                    }
-                };
+                let public_key = cred_bundle.credential().signature_key();
 
                 let mut mdata = path_reader(&message).unwrap();
                 let msg_in = MlsMessageIn::tls_deserialize(&mut mdata).unwrap();
 
                 let unverified_message = group.parse_message(msg_in, &backend).unwrap();
-                group.process_unverified_message(unverified_message, None, &backend).await.unwrap();
+                group
+                    .process_unverified_message(unverified_message, Some(public_key), &backend)
+                    .await
+                    .unwrap();
             }
         }
     })
