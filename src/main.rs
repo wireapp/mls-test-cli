@@ -75,7 +75,11 @@ enum Command {
 #[derive(Subcommand, Debug)]
 enum KeyPackageCommand {
     /// Create a new key package and save it in the store.
-    Create,
+    Create {
+        /// How long in seconds will the key package be valid
+        #[clap(short, long)]
+        lifetime: Option<u64>,
+    },
     /// Compute the hash of a key package.
     Ref { key_package: String },
 }
@@ -157,9 +161,12 @@ fn get_credential_bundle(
     }
 }
 
-fn new_key_package(backend: &impl OpenMlsCryptoProvider) -> KeyPackageBundle {
+fn new_key_package(backend: &impl OpenMlsCryptoProvider, lifetime: Option<u64>) -> KeyPackageBundle {
     let cred_bundle = get_credential_bundle(backend);
-    let extensions = vec![];
+    let extensions = match lifetime {
+        Some(t) => vec![Extension::LifeTime(LifetimeExtension::new(t))],
+        None => vec![],
+    };
     let ciphersuites =
         [Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519];
     let kp_bundle =
@@ -213,9 +220,9 @@ fn main() {
             }
         }
         Command::KeyPackage {
-            command: KeyPackageCommand::Create,
+            command: KeyPackageCommand::Create { lifetime },
         } => {
-            let key_package_bundle = new_key_package(&backend);
+            let key_package_bundle = new_key_package(&backend, lifetime);
 
             // output key package to standard output
             key_package_bundle
@@ -246,7 +253,7 @@ fn main() {
             let group_id = GroupId::from_slice(&group_id);
             let group_config = default_configuration();
 
-            let kp_bundle = new_key_package(&backend);
+            let kp_bundle = new_key_package(&backend, None);
             let kp = kp_bundle.key_package();
             let kp_ref = kp.hash_ref(backend.crypto()).unwrap();
             let kp_hash = kp_ref.value();
