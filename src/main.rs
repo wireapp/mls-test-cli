@@ -35,6 +35,10 @@ enum Command {
     Init {
         client_id: ClientId,
     },
+    Show {
+        #[clap(subcommand)]
+        command: ShowCommand,
+    },
     KeyPackage {
         #[clap(subcommand)]
         command: KeyPackageCommand,
@@ -73,6 +77,16 @@ enum Command {
 }
 
 #[derive(Subcommand, Debug)]
+enum ShowCommand {
+    Message {
+        file: String
+    },
+    KeyPackage {
+        file: String
+    }
+}
+
+#[derive(Subcommand, Debug)]
 enum KeyPackageCommand {
     /// Create a new key package and save it in the store.
     Create {
@@ -88,6 +102,8 @@ enum KeyPackageCommand {
 enum GroupCommand {
     Create {
         group_id: String,
+        #[clap(long)]
+        key_package_out: Option<String>,
     },
     FromWelcome {
         welcome: String,
@@ -230,6 +246,24 @@ fn main() {
                 .tls_serialize(&mut io::stdout())
                 .unwrap();
         }
+        Command::Show {
+            command: ShowCommand::Message { file }
+        } => {
+            let message = {
+                let mut data = path_reader(&file).unwrap();
+                MlsMessageIn::tls_deserialize(&mut data).unwrap()
+            };
+            println!("{:#?}", message);
+        }
+        Command::Show {
+            command: ShowCommand::KeyPackage { file }
+        } => {
+            let kp = {
+                let mut data = path_reader(&file).unwrap();
+                KeyPackage::tls_deserialize(&mut data).unwrap()
+            };
+            println!("{:#?}", kp);
+        }
         Command::KeyPackage {
             command: KeyPackageCommand::Ref { key_package },
         } => {
@@ -246,7 +280,7 @@ fn main() {
             io::stdout().write_all(bytes).unwrap();
         }
         Command::Group {
-            command: GroupCommand::Create { group_id },
+            command: GroupCommand::Create { group_id, key_package_out },
         } => {
             let group_id = base64::decode(group_id)
                 .expect("Failed to decode group_id as base64");
@@ -255,6 +289,14 @@ fn main() {
 
             let kp_bundle = new_key_package(&backend, None);
             let kp = kp_bundle.key_package();
+
+            if let Some(key_package_out) = key_package_out {
+                let mut writer = fs::File::create(key_package_out).unwrap();
+                kp
+                    .tls_serialize(&mut writer)
+                    .unwrap();
+            }
+
             let kp_ref = kp.hash_ref(backend.crypto()).unwrap();
             let kp_hash = kp_ref.value();
 
