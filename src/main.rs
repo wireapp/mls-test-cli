@@ -162,7 +162,7 @@ enum ProposalCommand {
 #[derive(Subcommand, Debug)]
 enum ExternalProposalCommand {
     /// Create an add proposal
-    Add { key_package: String },
+    Add {},
 }
 
 fn path_reader(path: &str) -> io::Result<Box<dyn Read>> {
@@ -513,7 +513,7 @@ fn main() {
                 group_in,
                 group_out,
                 in_place,
-                command: ExternalProposalCommand::Add { key_package },
+                command: ExternalProposalCommand::Add {},
             } => {
                 let mut group = {
                     let data = path_reader(&group_in).unwrap();
@@ -521,12 +521,8 @@ fn main() {
                 };
 
                 let credential = get_credential_bundle(&backend).await;
-
-                let key_package = {
-                    let mut data = path_reader(&key_package).unwrap();
-                    KeyPackage::tls_deserialize(&mut data).unwrap()
-                };
-
+                let kp_bundle = new_key_package(&backend, None).await;
+                let key_package = kp_bundle.key_package().clone();
                 let external_proposal = ExternalProposal::new_add(
                     key_package,
                     group.group_id().clone(),
