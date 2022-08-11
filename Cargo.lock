@@ -435,6 +435,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "console_error_panic_hook"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
+dependencies = [
+ "cfg-if",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1274,7 +1284,7 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 [[package]]
 name = "openmls"
 version = "0.4.1"
-source = "git+https://github.com/wireapp/openmls?rev=c4da84f38d1e16915402d704cbba5ea4b99b248c#c4da84f38d1e16915402d704cbba5ea4b99b248c"
+source = "git+https://github.com/wireapp/openmls?branch=feat/async#46ee6e0f9f2afe1882f7e2a970cfd240eff1e664"
 dependencies = [
  "async-std",
  "backtrace",
@@ -1295,13 +1305,14 @@ dependencies = [
  "tls_codec",
  "typetag",
  "uuid",
+ "wasm-bindgen-test",
  "x509-parser",
 ]
 
 [[package]]
 name = "openmls_memory_keystore"
 version = "0.1.0"
-source = "git+https://github.com/wireapp/openmls?rev=c4da84f38d1e16915402d704cbba5ea4b99b248c#c4da84f38d1e16915402d704cbba5ea4b99b248c"
+source = "git+https://github.com/wireapp/openmls?branch=feat/async#46ee6e0f9f2afe1882f7e2a970cfd240eff1e664"
 dependencies = [
  "async-trait",
  "openmls_traits",
@@ -1311,7 +1322,7 @@ dependencies = [
 [[package]]
 name = "openmls_rust_crypto"
 version = "0.1.0"
-source = "git+https://github.com/wireapp/openmls?rev=c4da84f38d1e16915402d704cbba5ea4b99b248c#c4da84f38d1e16915402d704cbba5ea4b99b248c"
+source = "git+https://github.com/wireapp/openmls?branch=feat/async#46ee6e0f9f2afe1882f7e2a970cfd240eff1e664"
 dependencies = [
  "aes-gcm",
  "chacha20poly1305",
@@ -1332,7 +1343,7 @@ dependencies = [
 [[package]]
 name = "openmls_traits"
 version = "0.1.0"
-source = "git+https://github.com/wireapp/openmls?rev=c4da84f38d1e16915402d704cbba5ea4b99b248c#c4da84f38d1e16915402d704cbba5ea4b99b248c"
+source = "git+https://github.com/wireapp/openmls?branch=feat/async#46ee6e0f9f2afe1882f7e2a970cfd240eff1e664"
 dependencies = [
  "async-trait",
  "serde",
@@ -1745,6 +1756,12 @@ name = "ryu"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4501abdff3ae82a1c1b477a17252eb69cee9e66eb915c1abaa4f44d873df9f09"
+
+[[package]]
+name = "scoped-tls"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea6a9290e3c9cf0f18145ef7ffa62d68ee0bf5fcd651017e586dc7fd5da448c2"
 
 [[package]]
 name = "scopeguard"
@@ -2169,6 +2186,30 @@ name = "wasm-bindgen-shared"
 version = "0.2.82"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6598dd0bd3c7d51095ff6531a5b23e02acdc81804e30d8f07afb77b7215a140a"
+
+[[package]]
+name = "wasm-bindgen-test"
+version = "0.3.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "513df541345bb9fcc07417775f3d51bbb677daf307d8035c0afafd87dc2e6599"
+dependencies = [
+ "console_error_panic_hook",
+ "js-sys",
+ "scoped-tls",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test-macro",
+]
+
+[[package]]
+name = "wasm-bindgen-test-macro"
+version = "0.3.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6150d36a03e90a3cf6c12650be10626a9902d70c5270fd47d7a47e5389a10d56"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
 
 [[package]]
 name = "web-sys"

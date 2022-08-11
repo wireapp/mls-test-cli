@@ -17,17 +17,17 @@ clap = { version = "3", features = ["derive"] }
 
 [patch.crates-io.openmls]
 git = "https://github.com/wireapp/openmls"
-rev = "c4da84f38d1e16915402d704cbba5ea4b99b248c"
+branch = "feat/async"
 package = "openmls"
 
 [patch.crates-io.openmls_rust_crypto]
 git = "https://github.com/wireapp/openmls"
-rev = "c4da84f38d1e16915402d704cbba5ea4b99b248c"
+branch = "feat/async"
 package = "openmls_rust_crypto"
 
 [patch.crates-io.openmls_traits]
 git = "https://github.com/wireapp/openmls"
-rev = "c4da84f38d1e16915402d704cbba5ea4b99b248c"
+branch = "feat/async"
 package = "openmls_traits"
 
 [dev-dependencies]

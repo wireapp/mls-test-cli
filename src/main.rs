@@ -184,7 +184,9 @@ fn default_configuration() -> MlsGroupConfig {
         .build()
 }
 
-async fn get_credential_bundle(backend: &impl OpenMlsCryptoProvider) -> CredentialBundle {
+async fn get_credential_bundle(
+    backend: &impl OpenMlsCryptoProvider,
+) -> CredentialBundle {
     let ks = backend.key_store();
     match ks.read(b"self").await {
         Some(bundle) => bundle,
@@ -203,9 +205,11 @@ async fn new_key_package(
         Some(t) => vec![Extension::LifeTime(LifetimeExtension::new(t))],
         None => vec![],
     };
-    let ciphersuites = [Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519];
+    let ciphersuites =
+        [Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519];
     let kp_bundle =
-        KeyPackageBundle::new(&ciphersuites, &cred_bundle, backend, extensions).unwrap();
+        KeyPackageBundle::new(&ciphersuites, &cred_bundle, backend, extensions)
+            .unwrap();
 
     // store the key package bundle in the key store
     let key_package = kp_bundle.key_package();
@@ -258,7 +262,8 @@ fn main() {
             Command::KeyPackage {
                 command: KeyPackageCommand::Create { lifetime },
             } => {
-                let key_package_bundle = new_key_package(&backend, lifetime).await;
+                let key_package_bundle =
+                    new_key_package(&backend, lifetime).await;
 
                 // output key package to standard output
                 key_package_bundle
@@ -307,8 +312,8 @@ fn main() {
                         key_package_out,
                     },
             } => {
-                let group_id =
-                    base64::decode(group_id).expect("Failed to decode group_id as base64");
+                let group_id = base64::decode(group_id)
+                    .expect("Failed to decode group_id as base64");
                 let group_id = GroupId::from_slice(&group_id);
                 let group_config = default_configuration();
 
@@ -323,19 +328,32 @@ fn main() {
                 let kp_ref = kp.hash_ref(backend.crypto()).unwrap();
                 let kp_hash = kp_ref.value();
 
-                let mut group =
-                    MlsGroup::new(&backend, &group_config, group_id, kp_hash.as_slice()).await.unwrap();
+                let mut group = MlsGroup::new(
+                    &backend,
+                    &group_config,
+                    group_id,
+                    kp_hash.as_slice(),
+                )
+                .await
+                .unwrap();
                 group.save(&mut io::stdout()).unwrap();
             }
             Command::Group {
                 command: GroupCommand::FromWelcome { welcome, group_out },
             } => {
                 let group_config = default_configuration();
-                let welcome =
-                    Welcome::tls_deserialize(&mut fs::File::open(welcome).unwrap()).unwrap();
-                let mut group = MlsGroup::new_from_welcome(&backend, &group_config, welcome, None)
-                    .await
-                    .unwrap();
+                let welcome = Welcome::tls_deserialize(
+                    &mut fs::File::open(welcome).unwrap(),
+                )
+                .unwrap();
+                let mut group = MlsGroup::new_from_welcome(
+                    &backend,
+                    &group_config,
+                    welcome,
+                    None,
+                )
+                .await
+                .unwrap();
                 let mut group_out = fs::File::create(group_out).unwrap();
                 group.save(&mut group_out).unwrap();
             }
@@ -356,18 +374,22 @@ fn main() {
                 let kps = key_packages
                     .into_iter()
                     .map(|kp| {
-                        let mut data = path_reader(&kp)
-                            .expect(&format!("Could not open key package file: {}", kp));
+                        let mut data = path_reader(&kp).expect(&format!(
+                            "Could not open key package file: {}",
+                            kp
+                        ));
                         KeyPackage::tls_deserialize(&mut data).unwrap()
                     })
                     .collect::<Vec<_>>();
-                let (handshake, welcome) = group.add_members(&backend, &kps).await.unwrap();
+                let (handshake, welcome, _) =
+                    group.add_members(&backend, &kps).await.unwrap();
 
                 if let Some(welcome_out) = welcome_out {
                     let mut writer = fs::File::create(welcome_out).unwrap();
                     welcome.tls_serialize(&mut writer).unwrap();
                 }
-                let group_out = if in_place { Some(group_in) } else { group_out };
+                let group_out =
+                    if in_place { Some(group_in) } else { group_out };
                 if let Some(group_out) = group_out {
                     let mut writer = fs::File::create(group_out).unwrap();
                     group.merge_pending_commit().unwrap();
@@ -393,19 +415,23 @@ fn main() {
                 let kprefs = key_packages
                     .into_iter()
                     .map(|filename| {
-                        let mut data = path_reader(&filename)
-                            .expect(&format!("Could not open key package file: {}", filename));
-                        let kp = KeyPackage::tls_deserialize(&mut data).unwrap();
+                        let mut data = path_reader(&filename).expect(&format!(
+                            "Could not open key package file: {}",
+                            filename
+                        ));
+                        let kp =
+                            KeyPackage::tls_deserialize(&mut data).unwrap();
                         kp.hash_ref(backend.crypto()).unwrap()
                     })
                     .collect::<Vec<_>>();
 
-                let (commit, welcome) = group
+                let (commit, welcome, _) = group
                     .remove_members(&backend, kprefs.as_slice())
                     .await
                     .unwrap();
 
-                let group_out = if in_place { Some(group_in) } else { group_out };
+                let group_out =
+                    if in_place { Some(group_in) } else { group_out };
                 if let Some(group_out) = group_out {
                     let mut writer = fs::File::create(group_out).unwrap();
                     group.merge_pending_commit().unwrap();
@@ -450,7 +476,8 @@ fn main() {
                     .unwrap();
                 message.tls_serialize(&mut io::stdout()).unwrap();
 
-                let group_out = if in_place { Some(group_in) } else { group_out };
+                let group_out =
+                    if in_place { Some(group_in) } else { group_out };
                 if let Some(group_out) = group_out {
                     let mut writer = fs::File::create(group_out).unwrap();
                     group.save(&mut writer).unwrap();
@@ -462,8 +489,9 @@ fn main() {
                 in_place,
                 command: ProposalCommand::Remove { key_package_ref },
             } => {
-                let key_package_ref =
-                    hash_ref::HashReference::from_slice(&base64::decode(key_package_ref).unwrap());
+                let key_package_ref = hash_ref::HashReference::from_slice(
+                    &base64::decode(key_package_ref).unwrap(),
+                );
                 let mut group = {
                     let data = path_reader(&group_in).unwrap();
                     MlsGroup::load(data).unwrap()
@@ -474,7 +502,8 @@ fn main() {
                     .unwrap();
                 message.tls_serialize(&mut io::stdout()).unwrap();
 
-                let group_out = if in_place { Some(group_in) } else { group_out };
+                let group_out =
+                    if in_place { Some(group_in) } else { group_out };
                 if let Some(group_out) = group_out {
                     let mut writer = fs::File::create(group_out).unwrap();
                     group.save(&mut writer).unwrap();
@@ -507,7 +536,8 @@ fn main() {
                 )
                 .unwrap();
 
-                let group_out = if in_place { Some(group_in) } else { group_out };
+                let group_out =
+                    if in_place { Some(group_in) } else { group_out };
                 if let Some(group_out) = group_out {
                     let mut writer = fs::File::create(group_out).unwrap();
                     group.save(&mut writer).unwrap();
@@ -521,7 +551,8 @@ fn main() {
                     MlsGroup::load(data).unwrap()
                 };
 
-                let (message, welcome) = group.commit_to_pending_proposals(&backend).await.unwrap();
+                let (message, welcome, _) =
+                    group.commit_to_pending_proposals(&backend).await.unwrap();
                 message.tls_serialize(&mut io::stdout()).unwrap();
 
                 if let Some(welcome_out) = welcome_out {
@@ -543,9 +574,14 @@ fn main() {
                 let mut mdata = path_reader(&message).unwrap();
                 let msg_in = MlsMessageIn::tls_deserialize(&mut mdata).unwrap();
 
-                let unverified_message = group.parse_message(msg_in, &backend).unwrap();
+                let unverified_message =
+                    group.parse_message(msg_in, &backend).unwrap();
                 group
-                    .process_unverified_message(unverified_message, Some(public_key), &backend)
+                    .process_unverified_message(
+                        unverified_message,
+                        Some(public_key),
+                        &backend,
+                    )
                     .await
                     .unwrap();
             }
