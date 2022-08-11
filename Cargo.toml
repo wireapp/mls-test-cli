@@ -1,6 +1,6 @@
 [package]
 name = "mls-test-cli"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 
 [dependencies]
@@ -17,17 +17,17 @@ clap = { version = "3", features = ["derive"] }
 
 [patch.crates-io.openmls]
 git = "https://github.com/wireapp/openmls"
-branch = "feat/async"
+rev = "c4da84f38d1e16915402d704cbba5ea4b99b248c"
 package = "openmls"
 
 [patch.crates-io.openmls_rust_crypto]
 git = "https://github.com/wireapp/openmls"
-branch = "feat/async"
+rev = "c4da84f38d1e16915402d704cbba5ea4b99b248c"
 package = "openmls_rust_crypto"
 
 [patch.crates-io.openmls_traits]
 git = "https://github.com/wireapp/openmls"
-branch = "feat/async"
+rev = "c4da84f38d1e16915402d704cbba5ea4b99b248c"
 package = "openmls_traits"
 
 [dev-dependencies]
