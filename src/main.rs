@@ -23,7 +23,7 @@ impl core::str::FromStr for ClientId {
 }
 
 #[derive(Parser, Debug)]
-#[clap(name = "mls-test-cli")]
+#[clap(name = "mls-test-cli", version)]
 struct Cli {
     #[clap(short, long)]
     store: String,
