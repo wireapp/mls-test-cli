@@ -90,6 +90,8 @@ enum Command {
         group: String,
         #[clap(short, long)]
         message: String,
+        #[clap(short, long)]
+        signer_key: String,
     },
 }
 
@@ -562,14 +564,15 @@ fn main() {
                     }
                 }
             }
-            Command::CheckSignature { group, message } => {
+            Command::CheckSignature { group, message, signer_key } => {
                 let mut group = {
                     let data = path_reader(&group).unwrap();
                     MlsGroup::load(data).unwrap()
                 };
 
-                let cred_bundle = get_credential_bundle(&backend).await;
-                let public_key = cred_bundle.credential().signature_key();
+                let mut public_key_data = Vec::new();
+                path_reader(&signer_key).unwrap().read_to_end(&mut public_key_data).unwrap();
+                let public_key = SignaturePublicKey::new(public_key_data, SignatureScheme::ED25519).unwrap();
 
                 let mut mdata = path_reader(&message).unwrap();
                 let msg_in = MlsMessageIn::tls_deserialize(&mut mdata).unwrap();
@@ -579,7 +582,7 @@ fn main() {
                 group
                     .process_unverified_message(
                         unverified_message,
-                        Some(public_key),
+                        Some(&public_key),
                         &backend,
                     )
                     .await
