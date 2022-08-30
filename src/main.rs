@@ -619,9 +619,10 @@ fn main() {
                     MlsGroup::load(data).unwrap()
                 };
 
+                // read public key
                 let mut public_key_data = Vec::new();
                 path_reader(&signer_key)
-                    .unwrap()
+                    .expect("Could not open signer key")
                     .read_to_end(&mut public_key_data)
                     .unwrap();
                 let public_key = SignaturePublicKey::new(
@@ -630,13 +631,14 @@ fn main() {
                 )
                 .unwrap();
 
+                // parse and verify message
                 let msg_in = {
                     let mut data = path_reader(&message).unwrap();
                     MlsMessageIn::tls_deserialize(&mut data).unwrap()
                 };
                 let unverified_message =
                     group.parse_message(msg_in, &backend).unwrap();
-                group
+                let message = group
                     .process_unverified_message(
                         unverified_message,
                         Some(&public_key),
@@ -645,6 +647,20 @@ fn main() {
                     .await
                     .unwrap();
 
+                // store proposal or apply commit
+                match message {
+                    ProcessedMessage::ApplicationMessage(_) => {}
+                    ProcessedMessage::ProposalMessage(staged_proposal) => {
+                        group.store_pending_proposal(*staged_proposal);
+                    }
+                    ProcessedMessage::StagedCommitMessage(staged_commit) => {
+                        group
+                            .merge_staged_commit(*staged_commit)
+                            .expect("Could not merge commit");
+                    }
+                }
+
+                // save new group state
                 let group_out =
                     if in_place { Some(group_in) } else { group_out };
                 if let Some(group_out) = group_out {
