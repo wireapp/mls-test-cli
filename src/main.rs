@@ -93,6 +93,17 @@ enum Command {
         #[clap(short, long)]
         signer_key: String,
     },
+    Consume {
+        #[clap(short, long)]
+        group: String,
+        #[clap(long)]
+        group_out: Option<String>,
+        #[clap(short, long, conflicts_with = "group-out")]
+        in_place: bool,
+        #[clap(short, long)]
+        signer_key: String,
+        message: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -560,15 +571,27 @@ fn main() {
                     }
                 }
             }
-            Command::CheckSignature { group, message, signer_key } => {
+            // TODO: This command is subsumed by Consume, and it can be deleted
+            Command::CheckSignature {
+                group,
+                message,
+                signer_key,
+            } => {
                 let mut group = {
                     let data = path_reader(&group).unwrap();
                     MlsGroup::load(data).unwrap()
                 };
 
                 let mut public_key_data = Vec::new();
-                path_reader(&signer_key).unwrap().read_to_end(&mut public_key_data).unwrap();
-                let public_key = SignaturePublicKey::new(public_key_data, SignatureScheme::ED25519).unwrap();
+                path_reader(&signer_key)
+                    .unwrap()
+                    .read_to_end(&mut public_key_data)
+                    .unwrap();
+                let public_key = SignaturePublicKey::new(
+                    public_key_data,
+                    SignatureScheme::ED25519,
+                )
+                .unwrap();
 
                 let mut mdata = path_reader(&message).unwrap();
                 let msg_in = MlsMessageIn::tls_deserialize(&mut mdata).unwrap();
@@ -583,6 +606,51 @@ fn main() {
                     )
                     .await
                     .unwrap();
+            }
+            Command::Consume {
+                group: group_in,
+                group_out,
+                in_place,
+                message,
+                signer_key,
+            } => {
+                let mut group = {
+                    let data = path_reader(&group_in).unwrap();
+                    MlsGroup::load(data).unwrap()
+                };
+
+                let mut public_key_data = Vec::new();
+                path_reader(&signer_key)
+                    .unwrap()
+                    .read_to_end(&mut public_key_data)
+                    .unwrap();
+                let public_key = SignaturePublicKey::new(
+                    public_key_data,
+                    SignatureScheme::ED25519,
+                )
+                .unwrap();
+
+                let msg_in = {
+                    let mut data = path_reader(&message).unwrap();
+                    MlsMessageIn::tls_deserialize(&mut data).unwrap()
+                };
+                let unverified_message =
+                    group.parse_message(msg_in, &backend).unwrap();
+                group
+                    .process_unverified_message(
+                        unverified_message,
+                        Some(&public_key),
+                        &backend,
+                    )
+                    .await
+                    .unwrap();
+
+                let group_out =
+                    if in_place { Some(group_in) } else { group_out };
+                if let Some(group_out) = group_out {
+                    let mut writer = fs::File::create(group_out).unwrap();
+                    group.save(&mut writer).unwrap();
+                }
             }
         }
     })
