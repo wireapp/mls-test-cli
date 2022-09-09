@@ -352,11 +352,11 @@ fn main() {
                 group.save(&mut io::stdout()).unwrap();
             }
             Command::Group {
-                command: GroupCommand::FromWelcome { welcome, group_out },
+                command: GroupCommand::FromWelcome { mut welcome, group_out },
             } => {
                 let group_config = default_configuration();
                 let welcome = Welcome::tls_deserialize(
-                    &mut fs::File::open(welcome).unwrap(),
+                    &mut path_reader(&mut welcome).unwrap()
                 )
                 .unwrap();
                 let mut group = MlsGroup::new_from_welcome(
