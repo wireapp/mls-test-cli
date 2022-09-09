@@ -106,8 +106,11 @@ enum Command {
         group_out: Option<String>,
         #[clap(short, long, conflicts_with = "group-out")]
         in_place: bool,
+        /// The public key used to sign the message. This is only used for external senders.
+        /// Signatures of messages originating from members are not verified at the moment, so this
+        /// option is ignored in those cases.
         #[clap(short, long)]
-        signer_key: String,
+        signer_key: Option<String>,
         message: String,
     },
 }
@@ -631,10 +634,30 @@ fn main() {
                 };
                 let unverified_message =
                     group.parse_message(msg_in, &backend).unwrap();
+
+                // read public key, but only if the sender is preconfigured
+                let public_key = match (signer_key, unverified_message.sender())
+                {
+                    (Some(signer_key), Sender::External(_)) => {
+                        let mut public_key_data = Vec::new();
+                        path_reader(&signer_key)
+                            .expect("Could not open signer key")
+                            .read_to_end(&mut public_key_data)
+                            .unwrap();
+                        let public_key = SignaturePublicKey::new(
+                            public_key_data,
+                            SignatureScheme::ED25519,
+                        )
+                        .unwrap();
+                        Some(public_key)
+                    }
+                    _ => None,
+                };
+
                 let message = group
                     .process_unverified_message(
                         unverified_message,
-                        Some(&public_key),
+                        public_key.as_ref(),
                         &backend,
                     )
                     .await
