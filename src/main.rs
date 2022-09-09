@@ -68,6 +68,7 @@ enum Command {
         #[clap(subcommand)]
         command: ProposalCommand,
     },
+    // FUTUREWORK: Turn this command into an alias for proposal-external
     ExternalProposal {
         #[clap(short, long)]
         group_in: String,
@@ -75,6 +76,14 @@ enum Command {
         group_out: Option<String>,
         #[clap(short, long, conflicts_with = "group-out")]
         in_place: bool,
+        #[clap(subcommand)]
+        command: ExternalProposalCommand,
+    },
+    ProposalExternal {
+        #[clap(short, long)]
+        group_id: String,
+        #[clap(short, long)]
+        epoch: u64,
         #[clap(subcommand)]
         command: ExternalProposalCommand,
     },
@@ -552,6 +561,28 @@ fn main() {
                     group.save(&mut writer).unwrap();
                 }
 
+                external_proposal.tls_serialize(&mut io::stdout()).unwrap();
+            }
+            Command::ProposalExternal {
+                group_id,
+                epoch,
+                command: ExternalProposalCommand::Add {},
+            } => {
+                let group_id = GroupId::from_slice(
+                    &base64::decode(group_id)
+                        .expect("Failed to decode group_id as base64"),
+                );
+                let credential = get_credential_bundle(&backend).await;
+                let kp_bundle = new_key_package(&backend, None).await;
+                let key_package = kp_bundle.key_package().clone();
+                let external_proposal = ExternalProposal::new_add(
+                    key_package,
+                    group_id,
+                    GroupEpoch::from(epoch),
+                    &credential,
+                    &backend,
+                )
+                .unwrap();
                 external_proposal.tls_serialize(&mut io::stdout()).unwrap();
             }
             Command::Commit { group, welcome_out } => {
