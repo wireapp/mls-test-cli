@@ -93,6 +93,8 @@ enum Command {
         group: String,
         #[clap(long)]
         group_out: Option<String>,
+        #[clap(long)]
+        group_state_out: Option<String>,
         #[clap(short, long, conflicts_with = "group-out")]
         in_place: bool,
         #[clap(short, long)]
@@ -170,6 +172,8 @@ enum MemberCommand {
         welcome_out: Option<String>,
         #[clap(long)]
         group_out: Option<String>,
+        #[clap(long)]
+        group_state_out: Option<String>,
         #[clap(short, long, conflicts_with = "group-out")]
         in_place: bool,
     },
@@ -435,6 +439,7 @@ fn main() {
                         key_packages,
                         welcome_out,
                         group_out,
+                        group_state_out,
                         in_place,
                     },
             } => {
@@ -456,7 +461,7 @@ fn main() {
                     })
                     .collect::<Vec<_>>();
 
-                let (commit, welcome, _) = group
+                let (commit, welcome, group_state) = group
                     .remove_members(&backend, kprefs.as_slice())
                     .await
                     .unwrap();
@@ -474,6 +479,11 @@ fn main() {
                         let mut writer = fs::File::create(welcome_out).unwrap();
                         welcome.tls_serialize(&mut writer).unwrap();
                     }
+                }
+
+                if let Some(group_state_out) = group_state_out {
+                    let mut writer = fs::File::create(group_state_out).unwrap();
+                    group_state.tls_serialize(&mut writer).unwrap();
                 }
 
                 commit.tls_serialize(&mut io::stdout()).unwrap();
@@ -599,6 +609,7 @@ fn main() {
             Command::Commit {
                 group: group_in,
                 group_out,
+                group_state_out,
                 in_place,
                 welcome_out,
             } => {
@@ -607,7 +618,7 @@ fn main() {
                     MlsGroup::load(data).unwrap()
                 };
 
-                let (message, welcome, _) =
+                let (message, welcome, group_state) =
                     group.commit_to_pending_proposals(&backend).await.unwrap();
                 message.tls_serialize(&mut io::stdout()).unwrap();
 
@@ -624,6 +635,11 @@ fn main() {
                     let mut writer = fs::File::create(group_out).unwrap();
                     group.merge_pending_commit().unwrap();
                     group.save(&mut writer).unwrap();
+                }
+
+                if let Some(group_state_out) = group_state_out {
+                    let mut writer = fs::File::create(group_state_out).unwrap();
+                    group_state.tls_serialize(&mut writer).unwrap();
                 }
             }
             Command::Consume {
