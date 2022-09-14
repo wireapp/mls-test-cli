@@ -157,6 +157,8 @@ enum MemberCommand {
         welcome_out: Option<String>,
         #[clap(long)]
         group_out: Option<String>,
+        #[clap(long)]
+        group_state_out: Option<String>,
         #[clap(short, long, conflicts_with = "group-out")]
         in_place: bool,
     },
@@ -386,6 +388,7 @@ fn main() {
                         key_packages,
                         welcome_out,
                         group_out,
+                        group_state_out,
                         in_place,
                     },
             } => {
@@ -403,7 +406,7 @@ fn main() {
                         KeyPackage::tls_deserialize(&mut data).unwrap()
                     })
                     .collect::<Vec<_>>();
-                let (handshake, welcome, _) =
+                let (handshake, welcome, group_state) =
                     group.add_members(&backend, &kps).await.unwrap();
 
                 if let Some(welcome_out) = welcome_out {
@@ -417,6 +420,12 @@ fn main() {
                     group.merge_pending_commit().unwrap();
                     group.save(&mut writer).unwrap();
                 }
+
+                if let Some(group_state_out) = group_state_out {
+                    let mut writer = fs::File::create(group_state_out).unwrap();
+                    group_state.tls_serialize(&mut writer).unwrap();
+                }
+
                 handshake.tls_serialize(&mut io::stdout()).unwrap();
             }
             Command::Member {
