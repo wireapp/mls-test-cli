@@ -461,8 +461,10 @@ fn main() {
                 }
 
                 if let Some(welcome_out) = welcome_out {
-                    let mut writer = fs::File::create(welcome_out).unwrap();
-                    welcome.tls_serialize(&mut writer).unwrap();
+                    if let Some(welcome) = welcome {
+                        let mut writer = fs::File::create(welcome_out).unwrap();
+                        welcome.tls_serialize(&mut writer).unwrap();
+                    }
                 }
 
                 commit.tls_serialize(&mut io::stdout()).unwrap();
