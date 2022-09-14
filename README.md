@@ -7,5 +7,5 @@ Use the build environment defined in [wire-server](https://www.github.com/wireap
 ```sh
 nix-shell -A mls_test_cli $WIRE_SERVER/nix/default.nix
 # inside nix-shell
-cargo build -r
+NIX_HARDENING_ENABLE="" cargo build
 ```
