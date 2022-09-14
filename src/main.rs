@@ -68,17 +68,15 @@ enum Command {
         #[clap(subcommand)]
         command: ProposalCommand,
     },
-    // FUTUREWORK: Turn this command into an alias for proposal-external
     ExternalProposal {
         #[clap(short, long)]
-        group_in: String,
-        #[clap(long)]
-        group_out: Option<String>,
-        #[clap(short, long, conflicts_with = "group-out")]
-        in_place: bool,
+        group_id: String,
+        #[clap(short, long)]
+        epoch: u64,
         #[clap(subcommand)]
         command: ExternalProposalCommand,
     },
+    // FUTUREWORK: Remove this once wire-server no longer uses it
     ProposalExternal {
         #[clap(short, long)]
         group_id: String,
@@ -553,35 +551,25 @@ fn main() {
                 }
             }
             Command::ExternalProposal {
-                group_in,
-                group_out,
-                in_place,
+                group_id,
+                epoch,
                 command: ExternalProposalCommand::Add {},
             } => {
-                let mut group = {
-                    let data = path_reader(&group_in).unwrap();
-                    MlsGroup::load(data).unwrap()
-                };
-
+                let group_id = GroupId::from_slice(
+                    &base64::decode(group_id)
+                        .expect("Failed to decode group_id as base64"),
+                );
                 let credential = get_credential_bundle(&backend).await;
                 let kp_bundle = new_key_package(&backend, None).await;
                 let key_package = kp_bundle.key_package().clone();
                 let external_proposal = ExternalProposal::new_add(
                     key_package,
-                    group.group_id().clone(),
-                    group.epoch(),
+                    group_id,
+                    GroupEpoch::from(epoch),
                     &credential,
                     &backend,
                 )
                 .unwrap();
-
-                let group_out =
-                    if in_place { Some(group_in) } else { group_out };
-                if let Some(group_out) = group_out {
-                    let mut writer = fs::File::create(group_out).unwrap();
-                    group.save(&mut writer).unwrap();
-                }
-
                 external_proposal.tls_serialize(&mut io::stdout()).unwrap();
             }
             Command::ProposalExternal {
