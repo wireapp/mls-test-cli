@@ -210,15 +210,24 @@ fn default_configuration() -> MlsGroupConfig {
         .build()
 }
 
+async fn get_self_credential_bundle(
+    backend: &impl OpenMlsCryptoProvider,
+) -> CredentialBundle {
+    get_credential_bundle(
+        b"self",
+        "Credential not initialised. Please run `init` first.",
+        backend).await
+}
+
 async fn get_credential_bundle(
+    ind: &[u8],
+    msg: &str,
     backend: &impl OpenMlsCryptoProvider,
 ) -> CredentialBundle {
     let ks = backend.key_store();
-    match ks.read(b"self").await {
+    match ks.read(ind).await {
         Some(bundle) => bundle,
-        None => {
-            panic!("Credential not initialised. Please run `init` first.");
-        }
+        None => { panic!("{}", msg); }
     }
 }
 
@@ -226,7 +235,7 @@ async fn new_key_package(
     backend: &impl OpenMlsCryptoProvider,
     lifetime: Option<u64>,
 ) -> KeyPackageBundle {
-    let cred_bundle = get_credential_bundle(backend).await;
+    let cred_bundle = get_self_credential_bundle(backend).await;
     let extensions = match lifetime {
         Some(t) => vec![Extension::LifeTime(LifetimeExtension::new(t))],
         None => vec![],
@@ -326,7 +335,7 @@ fn main() {
                     .unwrap();
             }
             Command::PublicKey => {
-                let cred_bundle = get_credential_bundle(&backend).await;
+                let cred_bundle = get_self_credential_bundle(&backend).await;
                 let credential = cred_bundle.credential();
                 let bytes = credential.signature_key().as_slice();
                 io::stdout().write_all(bytes).unwrap();
@@ -559,7 +568,7 @@ fn main() {
                     &base64::decode(group_id)
                         .expect("Failed to decode group_id as base64"),
                 );
-                let credential = get_credential_bundle(&backend).await;
+                let credential = get_self_credential_bundle(&backend).await;
                 let kp_bundle = new_key_package(&backend, None).await;
                 let key_package = kp_bundle.key_package().clone();
                 let external_proposal = ExternalProposal::new_add(
@@ -581,7 +590,7 @@ fn main() {
                     &base64::decode(group_id)
                         .expect("Failed to decode group_id as base64"),
                 );
-                let credential = get_credential_bundle(&backend).await;
+                let credential = get_self_credential_bundle(&backend).await;
                 let kp_bundle = new_key_package(&backend, None).await;
                 let key_package = kp_bundle.key_package().clone();
                 let external_proposal = ExternalProposal::new_add(
