@@ -98,6 +98,13 @@ enum Command {
         #[clap(short, long)]
         welcome_out: Option<String>,
     },
+    /// Create an external commit
+    ExternalCommit {
+        #[clap(long)]
+        group_state_in: String,
+        #[clap(long)]
+        group_out: Option<String>,
+    },
     /// Receive and store an incoming message.
     Consume {
         #[clap(short, long)]
@@ -629,6 +636,28 @@ fn main() {
                     let mut writer = fs::File::create(group_state_out).unwrap();
                     group_state.tls_serialize(&mut writer).unwrap();
                 }
+            }
+            Command::ExternalCommit {
+                group_state_in,
+                group_out,
+            } => {
+                let mut data = path_reader(&group_state_in).unwrap();
+                let vpgs = VerifiablePublicGroupState::tls_deserialize(&mut data).unwrap();
+                let group_config = default_configuration();
+                let cred_bundle = get_credential_bundle(&backend).await;
+                let (mut group, message) = MlsGroup::join_by_external_commit(
+                        &backend,
+                        None,
+                        vpgs,
+                        &group_config,
+                        &[],
+                        &cred_bundle
+                        ).await.unwrap();
+                if let Some(group_out) = group_out {
+                    let mut writer = fs::File::create(group_out).unwrap();
+                    group.save(&mut writer).unwrap();
+                }
+                message.tls_serialize(&mut io::stdout()).unwrap();
             }
             Command::Consume {
                 group: group_in,
