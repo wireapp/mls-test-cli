@@ -520,7 +520,7 @@ fn main() {
                     let data = path_reader(&group_in).unwrap();
                     MlsGroup::load(data).unwrap()
                 };
-                let message = group
+                let (message, _) = group
                     .propose_add_member(&backend, &key_package)
                     .await
                     .unwrap();
@@ -546,7 +546,7 @@ fn main() {
                     let data = path_reader(&group_in).unwrap();
                     MlsGroup::load(data).unwrap()
                 };
-                let message = group
+                let (message, _) = group
                     .propose_remove_member(&backend, &key_package_ref)
                     .await
                     .unwrap();
