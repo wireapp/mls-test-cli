@@ -656,6 +656,8 @@ fn main() {
                         &[],
                         &cred_bundle
                         ).await.unwrap();
+                group.merge_pending_commit().unwrap();
+                assert_eq!(group.credential().unwrap().identity(), cred_bundle.credential().identity());
                 if let Some(group_out) = group_out {
                     let mut writer = fs::File::create(group_out).unwrap();
                     group.save(&mut writer).unwrap();
