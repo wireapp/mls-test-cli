@@ -421,12 +421,17 @@ fn main() {
                 let (handshake, welcome, group_state) = if kps.is_empty() {
                     group.commit_to_pending_proposals(&backend).await.unwrap()
                 } else {
-                    group.add_members(&backend, &kps).await.unwrap()
+                    let (commit, welcome, group_state) =
+                        group.add_members(&backend, &kps).await.unwrap();
+                    (commit, Some(welcome), group_state)
                 };
 
-                if let Some(welcome_out) = welcome_out && Some (welcome) = welcome {
-                    let mut writer = fs::File::create(welcome_out).unwrap();
-                    welcome.tls_serialize(&mut writer).unwrap();
+                match (welcome_out, welcome) {
+                    (Some(welcome_out), Some(welcome)) => {
+                        let mut writer = fs::File::create(welcome_out).unwrap();
+                        welcome.tls_serialize(&mut writer).unwrap();
+                    }
+                    _ => {}
                 }
                 let group_out =
                     if in_place { Some(group_in) } else { group_out };
