@@ -417,10 +417,14 @@ fn main() {
                         KeyPackage::tls_deserialize(&mut data).unwrap()
                     })
                     .collect::<Vec<_>>();
-                let (handshake, welcome, group_state) =
-                    group.add_members(&backend, &kps).await.unwrap();
 
-                if let Some(welcome_out) = welcome_out {
+                let (handshake, welcome, group_state) = if kps.is_empty() {
+                    group.commit_to_pending_proposals(&backend).await.unwrap()
+                } else {
+                    group.add_members(&backend, &kps).await.unwrap()
+                };
+
+                if let Some(welcome_out) = welcome_out && Some (welcome) = welcome {
                     let mut writer = fs::File::create(welcome_out).unwrap();
                     welcome.tls_serialize(&mut writer).unwrap();
                 }
@@ -645,17 +649,22 @@ fn main() {
                 group_out,
             } => {
                 let mut data = path_reader(&group_state_in).unwrap();
-                let vpgs = VerifiablePublicGroupState::tls_deserialize(&mut data).unwrap();
+                let vpgs =
+                    VerifiablePublicGroupState::tls_deserialize(&mut data)
+                        .unwrap();
                 let group_config = default_configuration();
                 let cred_bundle = get_credential_bundle(&backend).await;
-                let (mut group, message, new_pgs) = MlsGroup::join_by_external_commit(
+                let (mut group, message, new_pgs) =
+                    MlsGroup::join_by_external_commit(
                         &backend,
                         None,
                         vpgs,
                         &group_config,
                         &[],
-                        &cred_bundle
-                        ).await.unwrap();
+                        &cred_bundle,
+                    )
+                    .await
+                    .unwrap();
                 group.merge_pending_commit().unwrap();
                 if let Some(group_out) = group_out {
                     let mut writer = fs::File::create(group_out).unwrap();
