@@ -1,6 +1,4 @@
-use async_trait::async_trait;
-use openmls::prelude::*;
-use openmls_traits::key_store::{FromKeyStoreValue, ToKeyStoreValue};
+use openmls_traits::key_store::{MlsEntity, OpenMlsKeyStore};
 
 use std::fmt::Display;
 use std::io::Write;
@@ -9,6 +7,8 @@ use std::path::{Path, PathBuf};
 pub struct TestKeyStore {
     path: PathBuf,
 }
+
+impl std::error::Error for TestKeyStoreError {}
 
 impl TestKeyStore {
     pub fn create<P: AsRef<Path>>(path: P) -> Result<Self, std::io::Error> {
@@ -23,9 +23,23 @@ impl TestKeyStore {
         path.push(base64::encode_config(k, base64::URL_SAFE));
         path
     }
-}
 
-impl std::error::Error for TestKeyStoreError {}
+    pub fn store_bytes(
+        &self,
+        k: &[u8],
+    ) -> Result<std::fs::File, TestKeyStoreError> {
+        let file = std::fs::File::create(self.key_path(k))?;
+        Ok(file)
+    }
+
+    pub fn read_bytes(
+        &self,
+        k: &[u8],
+    ) -> Result<std::fs::File, TestKeyStoreError> {
+        let file = std::fs::File::open(self.key_path(k))?;
+        Ok(file)
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TestKeyStoreError(String);
@@ -48,23 +62,22 @@ impl From<std::io::Error> for TestKeyStoreError {
     }
 }
 
-#[async_trait]
 impl OpenMlsKeyStore for TestKeyStore {
     type Error = TestKeyStoreError;
 
-    async fn store<V: ToKeyStoreValue>(&self, k: &[u8], v: &V) -> Result<(), Self::Error> {
-        let mut file = std::fs::File::create(self.key_path(k))?;
-        let value = v.to_key_store_value().map_err(|e| e.to_string())?;
-        file.write_all(&value)?;
+    fn store<V: MlsEntity>(&self, k: &[u8], v: &V) -> Result<(), Self::Error> {
+        let mut out = self.store_bytes(k)?;
+        let value = v.tls_serialize_detached().map_err(|e| e.to_string())?;
+        out.write_all(&value)?;
         Ok(())
     }
 
-    async fn read<V: FromKeyStoreValue>(&self, k: &[u8]) -> Option<V> {
-        let buf = std::fs::read(self.key_path(k)).ok()?;
-        V::from_key_store_value(&buf).ok()
+    fn read<V: MlsEntity>(&self, k: &[u8]) -> Option<V> {
+        let mut out = self.read_bytes(k).ok()?;
+        V::tls_deserialize(&mut out).ok()
     }
 
-    async fn delete<V: ToKeyStoreValue>(&self, k: &[u8]) -> Result<(), Self::Error> {
+    fn delete<V: MlsEntity>(&self, k: &[u8]) -> Result<(), Self::Error> {
         std::fs::remove_file(self.key_path(k))?;
         Ok(())
     }
@@ -73,6 +86,7 @@ impl OpenMlsKeyStore for TestKeyStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use openmls_traits::key_store::MlsEntityId;
     use tempdir::TempDir;
 
     #[derive(Debug, PartialEq)]
@@ -84,20 +98,8 @@ mod tests {
         }
     }
 
-    impl FromKeyStoreValue for Value {
-        type Error = String;
-
-        fn from_key_store_value(v: &[u8]) -> Result<Self, String> {
-            Ok(Self(v.to_vec()))
-        }
-    }
-
-    impl ToKeyStoreValue for Value {
-        type Error = String;
-
-        fn to_key_store_value(&self) -> Result<Vec<u8>, String> {
-            Ok(self.0.clone())
-        }
+    impl MlsEntity for Value {
+        const ID: MlsEntityId = MlsEntityId::KeyPackage;
     }
 
     #[test]

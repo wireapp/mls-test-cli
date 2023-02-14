@@ -4,10 +4,11 @@ version = "0.6.0"
 edition = "2021"
 
 [dependencies]
-openmls = { version = "0.4.1", features = ["test-utils"] }
-# openmls = { git = "https://github.com/openmls/openmls", rev = "6e15ef1b6569beddc84a944d3d0aeef562a418b0", features = ["test-utils"] }
-openmls_traits = "0.1"
-openmls_rust_crypto = "0.1"
+openmls = { git = "https://github.com/openmls/openmls" }
+openmls_traits = { git = "https://github.com/openmls/openmls" }
+openmls_rust_crypto = { git = "https://github.com/openmls/openmls" }
+openmls_basic_credential = { git = "https://github.com/openmls/openmls/" }
+tls_codec = { version = "0.2.0", features = ["derive", "serde", "mls"] }
 futures-lite = "1.12"
 async-trait = "0.1"
 
@@ -15,20 +16,17 @@ base64 = "0.13.0"
 uuid = "1.0.0-alpha"
 clap = { version = "3", features = ["derive"] }
 
-[patch.crates-io.openmls]
-git = "https://github.com/wireapp/openmls"
-branch = "feat/async"
-package = "openmls"
+[patch.crates-io.tls_codec]
+git = "https://github.com/RustCrypto/formats.git"
 
-[patch.crates-io.openmls_rust_crypto]
-git = "https://github.com/wireapp/openmls"
-branch = "feat/async"
-package = "openmls_rust_crypto"
+[patch.crates-io.hpke-rs]
+git = "https://github.com/franziskuskiefer/hpke-rs.git"
 
-[patch.crates-io.openmls_traits]
-git = "https://github.com/wireapp/openmls"
-branch = "feat/async"
-package = "openmls_traits"
+[patch.crates-io.hpke-rs-crypto]
+git = "https://github.com/franziskuskiefer/hpke-rs.git"
+
+[patch.crates-io.hpke-rs-rust-crypto]
+git = "https://github.com/franziskuskiefer/hpke-rs.git"
 
 [patch.crates-io.tls_codec]
 git = "https://github.com/wireapp/formats"
