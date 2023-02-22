@@ -30,6 +30,11 @@ git = "https://github.com/wireapp/openmls"
 branch = "feat/async"
 package = "openmls_traits"
 
+[patch.crates-io.tls_codec]
+git = "https://github.com/wireapp/formats"
+branch = "fix-partial-read-backport"
+package = "tls_codec"
+
 [dev-dependencies]
 tempdir = "0.3"
 
