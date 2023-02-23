@@ -1483,7 +1483,7 @@ dependencies = [
 [[package]]
 name = "tls_codec"
 version = "0.2.0"
-source = "git+https://github.com/RustCrypto/formats.git#08bb10d177c2b9b6c085b509a69c40c8cd5ea006"
+source = "git+https://github.com/wireapp/formats?branch=fix-partial-read#8762a0613b61ca422ba24fa665404f27c5eb4153"
 dependencies = [
  "serde",
  "tls_codec_derive",
@@ -1493,7 +1493,7 @@ dependencies = [
 [[package]]
 name = "tls_codec_derive"
 version = "0.2.0"
-source = "git+https://github.com/RustCrypto/formats.git#08bb10d177c2b9b6c085b509a69c40c8cd5ea006"
+source = "git+https://github.com/wireapp/formats?branch=fix-partial-read#8762a0613b61ca422ba24fa665404f27c5eb4153"
 dependencies = [
  "proc-macro2",
  "quote",

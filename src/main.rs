@@ -61,27 +61,6 @@ impl CredentialBundle {
     }
 }
 
-// impl TlsDeserializeTrait for CredentialBundle {
-//     fn tls_deserialize<R: Read>(
-//         bytes: &mut R,
-//     ) -> Result<Self, tls_codec::Error> {
-//         let credential = Credential::tls_deserialize(bytes)?;
-//         let keys = SignatureKeyPair::tls_deserialize(bytes)?;
-//         Self { credential, keys }
-//     }
-// }
-
-// impl TlsSerializeTrait for CredentialBundle {
-//     fn tls_serialize<W: Write>(
-//         &self,
-//         writer: &mut W,
-//     ) -> Result<usize, tls_codec::Error> {
-//         let mut written = self.credential.tls_serialize(writer)?;
-//         written += self.keys.tls_serialize(writer)?;
-//         Ok(written)
-//     }
-// }
-
 #[derive(Parser, Debug)]
 #[clap(name = "mls-test-cli", version = env!("FULL_VERSION"))]
 struct Cli {
@@ -305,10 +284,10 @@ fn main() {
         Command::KeyPackage {
             command: KeyPackageCommand::Create { lifetime },
         } => {
-            let key_package_bundle = new_key_package(&backend, lifetime);
+            let key_package = new_key_package(&backend, lifetime);
 
             // output key package to standard output
-            key_package_bundle.tls_serialize(&mut io::stdout()).unwrap();
+            key_package.tls_serialize(&mut io::stdout()).unwrap();
         }
 
         Command::Show {

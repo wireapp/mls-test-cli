@@ -39,6 +39,11 @@ impl TestKeyStore {
         let file = std::fs::File::open(self.key_path(k))?;
         Ok(file)
     }
+
+    pub fn delete_entry(&self, k: &[u8]) -> Result<(), TestKeyStoreError> {
+        std::fs::remove_file(self.key_path(k))?;
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -67,6 +72,7 @@ impl OpenMlsKeyStore for TestKeyStore {
 
     fn store<V: MlsEntity>(&self, k: &[u8], v: &V) -> Result<(), Self::Error> {
         let mut out = self.store_bytes(k)?;
+        // TODO: serialise directly
         let value = v.tls_serialize_detached().map_err(|e| e.to_string())?;
         out.write_all(&value)?;
         Ok(())
@@ -78,38 +84,29 @@ impl OpenMlsKeyStore for TestKeyStore {
     }
 
     fn delete<V: MlsEntity>(&self, k: &[u8]) -> Result<(), Self::Error> {
-        std::fs::remove_file(self.key_path(k))?;
-        Ok(())
+        self.delete_entry(k)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use openmls_traits::key_store::MlsEntityId;
+    use std::io::Read;
     use tempdir::TempDir;
-
-    #[derive(Debug, PartialEq)]
-    struct Value(Vec<u8>);
-
-    impl Value {
-        fn from_slice(v: &[u8]) -> Self {
-            Value(v.to_vec())
-        }
-    }
-
-    impl MlsEntity for Value {
-        const ID: MlsEntityId = MlsEntityId::KeyPackage;
-    }
 
     #[test]
     fn test_store_and_read() {
         let p = TempDir::new("store").unwrap();
         let ks = TestKeyStore::create(&p).unwrap();
 
-        let value = Value::from_slice(b"hello");
-        ks.store(b"foo", &value).unwrap();
-        assert_eq!(Some(value), ks.read(b"foo"));
+        let value = b"hello";
+        ks.store_bytes(b"foo").unwrap().write_all(value).unwrap();
+        let mut buf: Vec<u8> = Vec::new();
+        ks.read_bytes(b"foo")
+            .unwrap()
+            .read_to_end(&mut buf)
+            .unwrap();
+        assert_eq!(value, &buf[..]);
     }
 
     #[test]
@@ -117,10 +114,11 @@ mod tests {
         let p = TempDir::new("store").unwrap();
         let ks = TestKeyStore::create(&p).unwrap();
 
-        let value = Value::from_slice(b"hello");
-        ks.store(b"foo", &value).unwrap();
-        assert_eq!(Some(value), ks.read(b"foo"));
-        ks.delete(b"foo").unwrap();
-        assert_eq!(None, ks.read::<Value>(b"foo"));
+        ks.store_bytes(b"foo").unwrap().write_all(b"hello").unwrap();
+        ks.delete_entry(b"foo").unwrap();
+        match ks.read_bytes(b"foo") {
+            Err(_) => (),
+            Ok(_) => panic!("Unexpected success"),
+        }
     }
 }
