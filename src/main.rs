@@ -1,6 +1,7 @@
 mod backend;
 mod keystore;
 
+use openmls::prelude::group_info::VerifiableGroupInfo;
 use openmls::prelude::*;
 use openmls_basic_credential::SignatureKeyPair;
 
@@ -130,9 +131,9 @@ enum Command {
     /// Create an external commit
     ExternalCommit {
         #[clap(long)]
-        group_state_in: String,
+        group_info_in: String,
         #[clap(long)]
-        group_state_out: Option<String>,
+        group_info_out: Option<String>,
         #[clap(long)]
         group_out: Option<String>,
     },
@@ -555,11 +556,39 @@ fn main() {
             }
         }
         Command::ExternalCommit {
-            group_state_in: _,
-            group_state_out: _,
-            group_out: _,
+            group_info_in,
+            group_info_out,
+            group_out,
         } => {
-            // TODO
+            let cred_bundle = CredentialBundle::read(&backend);
+            let group_info = {
+                let mut data = path_reader(&group_info_in).unwrap();
+                VerifiableGroupInfo::tls_deserialize(&mut data).unwrap()
+            };
+
+            let (mut group, message, group_info) = MlsGroup::join_by_external_commit(
+                &backend,
+                &cred_bundle.keys,
+                None,
+                group_info,
+                &default_configuration(),
+                &[],
+                cred_bundle.credential_with_key(),
+            )
+            .unwrap();
+
+            message.tls_serialize(&mut io::stdout()).unwrap();
+
+            if let Some(group_out) = group_out {
+                let mut writer = fs::File::create(group_out).unwrap();
+                group.merge_pending_commit(&backend).unwrap();
+                group.save(&mut writer).unwrap();
+            }
+
+            if let Some(group_info_out) = group_info_out {
+                let mut writer = fs::File::create(group_info_out).unwrap();
+                group_info.tls_serialize(&mut writer).unwrap();
+            }
         }
         Command::Consume {
             group: group_in,
