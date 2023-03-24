@@ -122,7 +122,7 @@ enum Command {
         #[clap(long)]
         group_out: Option<String>,
         #[clap(long)]
-        group_state_out: Option<String>,
+        group_info_out: Option<String>,
         #[clap(short, long, conflicts_with = "group-out")]
         in_place: bool,
         #[clap(short, long)]
@@ -195,7 +195,7 @@ enum MemberCommand {
         #[clap(long)]
         group_out: Option<String>,
         #[clap(long)]
-        group_state_out: Option<String>,
+        group_info_out: Option<String>,
         #[clap(short, long, conflicts_with = "group-out")]
         in_place: bool,
     },
@@ -208,7 +208,7 @@ enum MemberCommand {
         #[clap(long)]
         group_out: Option<String>,
         #[clap(long)]
-        group_state_out: Option<String>,
+        group_info_out: Option<String>,
         #[clap(short, long, conflicts_with = "group-out")]
         in_place: bool,
     },
@@ -354,7 +354,7 @@ fn main() {
                     key_packages,
                     welcome_out,
                     group_out,
-                    group_state_out,
+                    group_info_out,
                     in_place,
                 },
         } => {
@@ -372,15 +372,15 @@ fn main() {
                 })
                 .collect::<Vec<_>>();
 
-            let (handshake, welcome, group_state) = if kps.is_empty() {
+            let (handshake, welcome, group_info) = if kps.is_empty() {
                 group
                     .commit_to_pending_proposals(&backend, &cred_bundle.keys)
                     .unwrap()
             } else {
-                let (commit, welcome, group_state) = group
+                let (commit, welcome, group_info) = group
                     .add_members(&backend, &cred_bundle.keys, &kps)
                     .unwrap();
-                (commit, Some(welcome), group_state)
+                (commit, Some(welcome), group_info)
             };
 
             match (welcome_out, welcome) {
@@ -397,9 +397,9 @@ fn main() {
                 group.save(&mut writer).unwrap();
             }
 
-            if let Some(group_state_out) = group_state_out {
-                let mut writer = fs::File::create(group_state_out).unwrap();
-                group_state.tls_serialize(&mut writer).unwrap();
+            if let (Some(group_info_out), Some(group_info)) = (group_info_out, group_info) {
+                let mut writer = fs::File::create(group_info_out).unwrap();
+                group_info.tls_serialize(&mut writer).unwrap();
             }
 
             handshake.tls_serialize(&mut io::stdout()).unwrap();
@@ -411,7 +411,7 @@ fn main() {
                     indices,
                     welcome_out,
                     group_out,
-                    group_state_out,
+                    group_info_out,
                     in_place,
                 },
         } => {
@@ -426,7 +426,7 @@ fn main() {
                 .map(LeafNodeIndex::new)
                 .collect::<Vec<_>>();
 
-            let (commit, welcome, group_state) = group
+            let (commit, welcome, group_info) = group
                 .remove_members(&backend, &cred_bundle.keys, &indices[..])
                 .unwrap();
 
@@ -444,9 +444,9 @@ fn main() {
                 }
             }
 
-            if let Some(group_state_out) = group_state_out {
-                let mut writer = fs::File::create(group_state_out).unwrap();
-                group_state.tls_serialize(&mut writer).unwrap();
+            if let (Some(group_info_out), Some(group_info)) = (group_info_out, group_info) {
+                let mut writer = fs::File::create(group_info_out).unwrap();
+                group_info.tls_serialize(&mut writer).unwrap();
             }
 
             commit.tls_serialize(&mut io::stdout()).unwrap();
@@ -521,7 +521,7 @@ fn main() {
         Command::Commit {
             group: group_in,
             group_out,
-            group_state_out,
+            group_info_out,
             in_place,
             welcome_out,
         } => {
@@ -531,7 +531,7 @@ fn main() {
                 MlsGroup::load(data).unwrap()
             };
 
-            let (message, welcome, group_state) = group
+            let (message, welcome, group_info) = group
                 .commit_to_pending_proposals(&backend, &cred_bundle.keys)
                 .unwrap();
             message.tls_serialize(&mut io::stdout()).unwrap();
@@ -550,9 +550,9 @@ fn main() {
                 group.save(&mut writer).unwrap();
             }
 
-            if let Some(group_state_out) = group_state_out {
-                let mut writer = fs::File::create(group_state_out).unwrap();
-                group_state.tls_serialize(&mut writer).unwrap();
+            if let (Some(group_info_out), Some(group_info)) = (group_info_out, group_info) {
+                let mut writer = fs::File::create(group_info_out).unwrap();
+                group_info.tls_serialize(&mut writer).unwrap();
             }
         }
         Command::ExternalCommit {

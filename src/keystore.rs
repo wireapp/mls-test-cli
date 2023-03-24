@@ -24,24 +24,18 @@ impl TestKeyStore {
         path
     }
 
-    pub fn store_bytes(
-        &self,
-        k: &[u8],
-    ) -> Result<std::fs::File, TestKeyStoreError> {
+    pub fn store_bytes(&self, k: &[u8]) -> Result<std::fs::File, TestKeyStoreError> {
         let file = std::fs::File::create(self.key_path(k))?;
         Ok(file)
     }
 
-    pub fn read_bytes(
-        &self,
-        k: &[u8],
-    ) -> Result<std::fs::File, TestKeyStoreError> {
+    pub fn read_bytes(&self, k: &[u8]) -> Result<std::fs::File, TestKeyStoreError> {
         let file = std::fs::File::open(self.key_path(k))?;
         Ok(file)
     }
 
     pub fn delete_entry(&self, k: &[u8]) -> Result<(), TestKeyStoreError> {
-        std::fs::remove_file(self.key_path(k))?;
+        std::fs::remove_file(self.key_path(k)).ok();
         Ok(())
     }
 }
