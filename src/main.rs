@@ -37,8 +37,7 @@ impl CredentialBundle {
     }
 
     fn new(client_id: ClientId) -> Self {
-        let credential =
-            Credential::new(client_id.0, CredentialType::Basic).unwrap();
+        let credential = Credential::new(client_id.0, CredentialType::Basic).unwrap();
         let keys = SignatureKeyPair::new(SignatureScheme::ED25519).unwrap();
         Self { credential, keys }
     }
@@ -247,10 +246,7 @@ fn default_configuration() -> MlsGroupConfig {
         .build()
 }
 
-fn new_key_package(
-    backend: &TestBackend,
-    _lifetime: Option<u64>,
-) -> KeyPackage {
+fn new_key_package(backend: &TestBackend, _lifetime: Option<u64>) -> KeyPackage {
     let cred_bundle = CredentialBundle::read(backend);
     let ciphersuite = Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
     KeyPackage::builder()
@@ -326,8 +322,7 @@ fn main() {
             command: GroupCommand::Create { group_id },
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
-            let group_id = base64::decode(group_id)
-                .expect("Failed to decode group_id as base64");
+            let group_id = base64::decode(group_id).expect("Failed to decode group_id as base64");
             let group_id = GroupId::from_slice(&group_id);
             let group_config = default_configuration();
 
@@ -345,16 +340,9 @@ fn main() {
             command: GroupCommand::FromWelcome { welcome, group_out },
         } => {
             let group_config = default_configuration();
-            let welcome =
-                Welcome::tls_deserialize(&mut path_reader(&welcome).unwrap())
-                    .unwrap();
-            let mut group = MlsGroup::new_from_welcome(
-                &backend,
-                &group_config,
-                welcome,
-                None,
-            )
-            .unwrap();
+            let welcome = Welcome::tls_deserialize(&mut path_reader(&welcome).unwrap()).unwrap();
+            let mut group =
+                MlsGroup::new_from_welcome(&backend, &group_config, welcome, None).unwrap();
             let mut group_out = fs::File::create(group_out).unwrap();
             group.save(&mut group_out).unwrap();
         }
@@ -377,10 +365,8 @@ fn main() {
             let kps = key_packages
                 .into_iter()
                 .map(|kp| {
-                    let mut data = path_reader(&kp).expect(&format!(
-                        "Could not open key package file: {}",
-                        kp
-                    ));
+                    let mut data = path_reader(&kp)
+                        .expect(&format!("Could not open key package file: {}", kp));
                     KeyPackage::tls_deserialize(&mut data).unwrap()
                 })
                 .collect::<Vec<_>>();
@@ -613,9 +599,7 @@ fn main() {
                         .merge_staged_commit(&backend, *staged_commit)
                         .expect("Could not merge commit");
                 }
-                ProcessedMessageContent::ExternalJoinProposalMessage(
-                    staged_proposal,
-                ) => {
+                ProcessedMessageContent::ExternalJoinProposalMessage(staged_proposal) => {
                     group.store_pending_proposal(*staged_proposal);
                 }
             }

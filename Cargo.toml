@@ -8,7 +8,7 @@ openmls = { git = "https://github.com/openmls/openmls" }
 openmls_traits = { git = "https://github.com/openmls/openmls" }
 openmls_rust_crypto = { git = "https://github.com/openmls/openmls" }
 openmls_basic_credential = { git = "https://github.com/openmls/openmls/" }
-tls_codec = { version = "0.2.0", features = ["derive", "serde", "mls"] }
+tls_codec = { version = "0.3.0-pre.1", features = ["derive", "serde", "mls"] }
 futures-lite = "1.12"
 async-trait = "0.1"
 
@@ -25,10 +25,9 @@ git = "https://github.com/franziskuskiefer/hpke-rs.git"
 [patch.crates-io.hpke-rs-rust-crypto]
 git = "https://github.com/franziskuskiefer/hpke-rs.git"
 
-[patch.crates-io.tls_codec]
-git = "https://github.com/wireapp/formats"
-branch = "fix-partial-read"
-package = "tls_codec"
+# [patch.crates-io.tls_codec]
+# git = "https://github.com/wireapp/formats"
+# package = "tls_codec"
 
 [dev-dependencies]
 tempdir = "0.3"
