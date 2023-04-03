@@ -1987,9 +1987,9 @@ dependencies = [
 
 [[package]]
 name = "spin"
-version = "0.9.4"
+version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f6002a767bff9e83f8eeecf883ecb8011875a21ae8da43bffb817a57e78cc09"
+checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
 name = "spki"
@@ -2108,8 +2108,7 @@ checksum = "42657b1a6f4d817cda8e7a0ace261fe0cc946cf3a80314390b22cc61ae080792"
 [[package]]
 name = "tls_codec"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "172a9c24d46b5fe280b77f37161ed9a919229cb104085384e8bf30637c2e4bca"
+source = "git+https://github.com/wireapp/formats?branch=fix-partial-read-backport#ec3a769764a27c2c49003ba6be4885c3721b1a8d"
 dependencies = [
  "serde",
  "tls_codec_derive",
@@ -2119,8 +2118,7 @@ dependencies = [
 [[package]]
 name = "tls_codec_derive"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a787719c86efec1535b071bde678f5fd649380e8005cd1ebd0afeb4bcc4d2a85"
+source = "git+https://github.com/wireapp/formats?branch=fix-partial-read-backport#ec3a769764a27c2c49003ba6be4885c3721b1a8d"
 dependencies = [
  "proc-macro2",
  "quote",
