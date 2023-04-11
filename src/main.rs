@@ -341,7 +341,11 @@ fn main() {
             command: GroupCommand::FromWelcome { welcome, group_out },
         } => {
             let group_config = default_configuration();
-            let welcome = Welcome::tls_deserialize(&mut path_reader(&welcome).unwrap()).unwrap();
+            let message = MlsMessageIn::tls_deserialize(&mut path_reader(&welcome).unwrap()).unwrap();
+            let welcome = match message.extract() {
+                MlsMessageInBody::Welcome(welcome) => welcome,
+                _ => {panic!("expected welcome")}
+            };
             let mut group =
                 MlsGroup::new_from_welcome(&backend, &group_config, welcome, None).unwrap();
             let mut group_out = fs::File::create(group_out).unwrap();
