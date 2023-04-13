@@ -613,7 +613,9 @@ fn main() {
                 group.save(&mut writer).unwrap();
             }
 
-            if let Some(group_info_out) = group_info_out {
+            if let (Some(group_info_out), Some(group_info)) =
+                (group_info_out, group_info)
+            {
                 let mut writer = fs::File::create(group_info_out).unwrap();
                 group_info.tls_serialize(&mut writer).unwrap();
             }
