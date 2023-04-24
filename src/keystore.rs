@@ -24,12 +24,18 @@ impl TestKeyStore {
         path
     }
 
-    pub fn store_bytes(&self, k: &[u8]) -> Result<std::fs::File, TestKeyStoreError> {
+    pub fn store_bytes(
+        &self,
+        k: &[u8],
+    ) -> Result<std::fs::File, TestKeyStoreError> {
         let file = std::fs::File::create(self.key_path(k))?;
         Ok(file)
     }
 
-    pub fn read_bytes(&self, k: &[u8]) -> Result<std::fs::File, TestKeyStoreError> {
+    pub fn read_bytes(
+        &self,
+        k: &[u8],
+    ) -> Result<std::fs::File, TestKeyStoreError> {
         let file = std::fs::File::open(self.key_path(k))?;
         Ok(file)
     }
@@ -61,23 +67,28 @@ impl From<std::io::Error> for TestKeyStoreError {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl OpenMlsKeyStore for TestKeyStore {
     type Error = TestKeyStoreError;
 
-    fn store<V: MlsEntity>(&self, k: &[u8], v: &V) -> Result<(), Self::Error> {
+    async fn store<V: MlsEntity>(
+        &self,
+        k: &[u8],
+        v: &V,
+    ) -> Result<(), Self::Error> {
         let mut out = self.store_bytes(k)?;
         // TODO: serialise directly
-        let value = v.tls_serialize_detached().map_err(|e| e.to_string())?;
+        let value = serde_json::to_vec(v).map_err(|e| e.to_string())?;
         out.write_all(&value)?;
         Ok(())
     }
 
-    fn read<V: MlsEntity>(&self, k: &[u8]) -> Option<V> {
-        let mut out = self.read_bytes(k).ok()?;
-        V::tls_deserialize(&mut out).ok()
+    async fn read<V: MlsEntity>(&self, k: &[u8]) -> Option<V> {
+        let mut reader = self.read_bytes(k).ok()?;
+        serde_json::from_reader(&mut reader).ok()
     }
 
-    fn delete<V: MlsEntity>(&self, k: &[u8]) -> Result<(), Self::Error> {
+    async fn delete<V: MlsEntity>(&self, k: &[u8]) -> Result<(), Self::Error> {
         self.delete_entry(k)
     }
 }

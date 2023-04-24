@@ -1,6 +1,7 @@
 mod backend;
 mod keystore;
 
+use futures_lite::future;
 use openmls::prelude::group_info::VerifiableGroupInfo;
 use openmls::prelude::*;
 use openmls_basic_credential::SignatureKeyPair;
@@ -37,10 +38,14 @@ impl CredentialBundle {
         }
     }
 
-    fn new(client_id: ClientId) -> Self {
+    fn new(backend: &impl OpenMlsCryptoProvider, client_id: ClientId) -> Self {
         let credential =
             Credential::new(client_id.0, CredentialType::Basic).unwrap();
-        let keys = SignatureKeyPair::new(SignatureScheme::ED25519).unwrap();
+        let keys = SignatureKeyPair::new(
+            SignatureScheme::ED25519,
+            &mut *backend.rand().borrow_rand().unwrap(),
+        )
+        .unwrap();
         Self { credential, keys }
     }
 
@@ -248,7 +253,7 @@ fn default_configuration() -> MlsGroupConfig {
         .build()
 }
 
-fn new_key_package(
+async fn new_key_package(
     backend: &TestBackend,
     _lifetime: Option<u64>,
 ) -> KeyPackage {
@@ -264,28 +269,29 @@ fn new_key_package(
             &cred_bundle.keys,
             cred_bundle.credential_with_key(),
         )
+        .await
         .unwrap()
 }
 
-fn main() {
+async fn run() {
     let cli = Cli::parse();
     let backend = TestBackend::new(&cli.store).unwrap();
     match cli.command {
         Command::Init { client_id } => {
             let ks = backend.key_store();
-            match ks.read::<SignatureKeyPair>(b"self") {
+            match ks.read::<SignatureKeyPair>(b"self").await {
                 Some(_) => {
                     panic!("Credential already initialised");
                 }
                 None => {
-                    CredentialBundle::new(client_id).store(&backend);
+                    CredentialBundle::new(&backend, client_id).store(&backend);
                 }
             }
         }
         Command::KeyPackage {
             command: KeyPackageCommand::Create { lifetime },
         } => {
-            let key_package = new_key_package(&backend, lifetime);
+            let key_package = new_key_package(&backend, lifetime).await;
 
             // output key package to standard output
             key_package.tls_serialize(&mut io::stdout()).unwrap();
@@ -305,17 +311,30 @@ fn main() {
         } => {
             let kp = {
                 let mut data = path_reader(&file).unwrap();
-                KeyPackage::tls_deserialize(&mut data).unwrap()
+                let key_package =
+                    KeyPackageIn::tls_deserialize(&mut data).unwrap();
+                let ciphersuite =
+                    Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
+                key_package
+                    .into_validated(backend.crypto(), ciphersuite)
+                    .unwrap();
             };
             println!("{:#?}", kp);
         }
         Command::KeyPackage {
             command: KeyPackageCommand::Ref { key_package },
         } => {
-            let mut kp_data = path_reader(&key_package).unwrap();
-            let kp = KeyPackage::tls_deserialize(&mut kp_data).unwrap();
+            let mut data = path_reader(&key_package).unwrap();
+            let key_package = KeyPackageIn::tls_deserialize(&mut data).unwrap();
+            let ciphersuite =
+                Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
+            let key_package = key_package
+                .into_validated(backend.crypto(), ciphersuite)
+                .unwrap();
             io::stdout()
-                .write_all(kp.hash_ref(backend.crypto()).unwrap().as_slice())
+                .write_all(
+                    key_package.hash_ref(backend.crypto()).unwrap().as_slice(),
+                )
                 .unwrap();
         }
         Command::PublicKey => {
@@ -339,6 +358,7 @@ fn main() {
                 group_id,
                 cred_bundle.credential_with_key(),
             )
+            .await
             .unwrap();
             group.save(&mut io::stdout()).unwrap();
         }
@@ -362,6 +382,7 @@ fn main() {
                 welcome,
                 None,
             )
+            .await
             .unwrap();
             let mut group_out = fs::File::create(group_out).unwrap();
             group.save(&mut group_out).unwrap();
@@ -389,17 +410,21 @@ fn main() {
                         "Could not open key package file: {}",
                         kp
                     ));
-                    KeyPackage::tls_deserialize(&mut data).unwrap()
+                    let kp = KeyPackageIn::tls_deserialize(&mut data).unwrap();
+                    let ciphersuite = group.ciphersuite();
+                    kp.into_validated(backend.crypto(), ciphersuite).unwrap()
                 })
                 .collect::<Vec<_>>();
 
             let (handshake, welcome, group_info) = if kps.is_empty() {
                 group
                     .commit_to_pending_proposals(&backend, &cred_bundle.keys)
+                    .await
                     .unwrap()
             } else {
                 let (commit, welcome, group_info) = group
                     .add_members(&backend, &cred_bundle.keys, &kps)
+                    .await
                     .unwrap();
                 (commit, Some(welcome), group_info)
             };
@@ -414,7 +439,7 @@ fn main() {
             let group_out = if in_place { Some(group_in) } else { group_out };
             if let Some(group_out) = group_out {
                 let mut writer = fs::File::create(group_out).unwrap();
-                group.merge_pending_commit(&backend).unwrap();
+                group.merge_pending_commit(&backend).await.unwrap();
                 group.save(&mut writer).unwrap();
             }
 
@@ -451,12 +476,13 @@ fn main() {
 
             let (commit, welcome, group_info) = group
                 .remove_members(&backend, &cred_bundle.keys, &indices[..])
+                .await
                 .unwrap();
 
             let group_out = if in_place { Some(group_in) } else { group_out };
             if let Some(group_out) = group_out {
                 let mut writer = fs::File::create(group_out).unwrap();
-                group.merge_pending_commit(&backend).unwrap();
+                group.merge_pending_commit(&backend).await.unwrap();
                 group.save(&mut writer).unwrap();
             }
 
@@ -494,13 +520,15 @@ fn main() {
             command: ProposalCommand::Add { key_package },
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
-            let key_package = {
-                let mut data = path_reader(&key_package).unwrap();
-                KeyPackage::tls_deserialize(&mut data).unwrap()
-            };
             let mut group = {
                 let data = path_reader(&group_in).unwrap();
                 MlsGroup::load(data).unwrap()
+            };
+            let key_package = {
+                let mut data = path_reader(&key_package).unwrap();
+                let kp = KeyPackageIn::tls_deserialize(&mut data).unwrap();
+                kp.into_validated(backend.crypto(), group.ciphersuite())
+                    .unwrap()
             };
             let (message, _) = group
                 .propose_add_member(&backend, &cred_bundle.keys, &key_package)
@@ -558,6 +586,7 @@ fn main() {
 
             let (message, welcome, group_info) = group
                 .commit_to_pending_proposals(&backend, &cred_bundle.keys)
+                .await
                 .unwrap();
             message.tls_serialize(&mut io::stdout()).unwrap();
 
@@ -571,7 +600,7 @@ fn main() {
             let group_out = if in_place { Some(group_in) } else { group_out };
             if let Some(group_out) = group_out {
                 let mut writer = fs::File::create(group_out).unwrap();
-                group.merge_pending_commit(&backend).unwrap();
+                group.merge_pending_commit(&backend).await.unwrap();
                 group.save(&mut writer).unwrap();
             }
 
@@ -603,13 +632,14 @@ fn main() {
                     &[],
                     cred_bundle.credential_with_key(),
                 )
+                .await
                 .unwrap();
 
             message.tls_serialize(&mut io::stdout()).unwrap();
 
             if let Some(group_out) = group_out {
                 let mut writer = fs::File::create(group_out).unwrap();
-                group.merge_pending_commit(&backend).unwrap();
+                group.merge_pending_commit(&backend).await.unwrap();
                 group.save(&mut writer).unwrap();
             }
 
@@ -645,7 +675,7 @@ fn main() {
                 MlsMessageInBody::PublicMessage(m) => m.into(),
                 _ => panic!("Unexpected message type"),
             };
-            let message = group.process_message(&backend, pmsg).unwrap();
+            let message = group.process_message(&backend, pmsg).await.unwrap();
 
             // store proposal or apply commit
             match message.into_content() {
@@ -656,6 +686,7 @@ fn main() {
                 ProcessedMessageContent::StagedCommitMessage(staged_commit) => {
                     group
                         .merge_staged_commit(&backend, *staged_commit)
+                        .await
                         .expect("Could not merge commit");
                 }
                 ProcessedMessageContent::ExternalJoinProposalMessage(
@@ -673,4 +704,8 @@ fn main() {
             }
         }
     }
+}
+
+fn main() {
+    future::block_on(run());
 }
