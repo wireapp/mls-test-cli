@@ -182,6 +182,8 @@ enum KeyPackageCommand {
 enum GroupCommand {
     Create {
         group_id: String,
+        #[clap(short, long)]
+        removal_key: Option<String>,
     },
     FromWelcome {
         welcome: String,
@@ -248,7 +250,9 @@ fn group_id_from_str(group_id: &str) -> GroupId {
     GroupId::from_slice(&group_id)
 }
 
-fn default_configuration() -> MlsGroupConfig {
+fn build_configuration(
+    external_senders: Vec<ExternalSender>,
+) -> MlsGroupConfig {
     MlsGroupConfig::builder()
         .wire_format_policy(openmls::group::MIXED_PLAINTEXT_WIRE_FORMAT_POLICY)
         .max_past_epochs(3)
@@ -256,6 +260,7 @@ fn default_configuration() -> MlsGroupConfig {
         .number_of_resumption_psks(1)
         .sender_ratchet_configuration(SenderRatchetConfiguration::new(2, 5))
         .use_ratchet_tree_extension(true)
+        .external_senders(external_senders)
         .build()
 }
 
@@ -320,11 +325,7 @@ async fn run() {
                 let mut data = path_reader(&file).unwrap();
                 let key_package =
                     KeyPackageIn::tls_deserialize(&mut data).unwrap();
-                let ciphersuite =
-                    Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
-                key_package
-                    .into_validated(backend.crypto(), ciphersuite)
-                    .unwrap();
+                key_package.validate(backend.crypto()).unwrap();
             };
             println!("{:#?}", kp);
         }
@@ -333,11 +334,7 @@ async fn run() {
         } => {
             let mut data = path_reader(&key_package).unwrap();
             let key_package = KeyPackageIn::tls_deserialize(&mut data).unwrap();
-            let ciphersuite =
-                Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
-            let key_package = key_package
-                .into_validated(backend.crypto(), ciphersuite)
-                .unwrap();
+            let key_package = key_package.validate(backend.crypto()).unwrap();
             io::stdout()
                 .write_all(
                     key_package.hash_ref(backend.crypto()).unwrap().as_slice(),
@@ -350,11 +347,32 @@ async fn run() {
             io::stdout().write_all(bytes).unwrap();
         }
         Command::Group {
-            command: GroupCommand::Create { group_id },
+            command:
+                GroupCommand::Create {
+                    group_id,
+                    removal_key,
+                },
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
             let group_id = group_id_from_str(&group_id);
-            let group_config = default_configuration();
+            let backend_credential =
+                Credential::new(b"backend".to_vec(), CredentialType::Basic)
+                    .unwrap();
+            let external_senders = match removal_key {
+                Some(removal_key) => {
+                    let removal_key = {
+                        let mut reader = path_reader(&removal_key).unwrap();
+                        let mut data = Vec::new();
+                        reader.read_to_end(&mut data).unwrap();
+                        SignaturePublicKey::from(data)
+                    };
+                    let backend_sender =
+                        ExternalSender::new(removal_key, backend_credential);
+                    vec![backend_sender]
+                }
+                None => vec![],
+            };
+            let group_config = build_configuration(external_senders);
 
             let mut group = MlsGroup::new_with_group_id(
                 &backend,
@@ -370,7 +388,7 @@ async fn run() {
         Command::Group {
             command: GroupCommand::FromWelcome { welcome, group_out },
         } => {
-            let group_config = default_configuration();
+            let group_config = build_configuration(vec![]);
             let message = MlsMessageIn::tls_deserialize(
                 &mut path_reader(&welcome).unwrap(),
             )
@@ -416,8 +434,7 @@ async fn run() {
                         kp
                     ));
                     let kp = KeyPackageIn::tls_deserialize(&mut data).unwrap();
-                    let ciphersuite = group.ciphersuite();
-                    kp.into_validated(backend.crypto(), ciphersuite).unwrap()
+                    kp.validate(backend.crypto()).unwrap()
                 })
                 .collect::<Vec<_>>();
 
@@ -532,8 +549,7 @@ async fn run() {
             let key_package = {
                 let mut data = path_reader(&key_package).unwrap();
                 let kp = KeyPackageIn::tls_deserialize(&mut data).unwrap();
-                kp.into_validated(backend.crypto(), group.ciphersuite())
-                    .unwrap()
+                kp.validate(backend.crypto()).unwrap()
             };
             let (message, _) = group
                 .propose_add_member(&backend, &cred_bundle.keys, &key_package)
@@ -643,7 +659,7 @@ async fn run() {
                     &cred_bundle.keys,
                     None,
                     group_info,
-                    &default_configuration(),
+                    &build_configuration(vec![]),
                     &[],
                     cred_bundle.credential_with_key(),
                 )
