@@ -242,6 +242,12 @@ fn path_reader(path: &str) -> io::Result<Box<dyn Read>> {
     }
 }
 
+fn group_id_from_str(group_id: &str) -> GroupId {
+    let group_id =
+        base64::decode(group_id).expect("Failed to decode group_id as base64");
+    GroupId::from_slice(&group_id)
+}
+
 fn default_configuration() -> MlsGroupConfig {
     MlsGroupConfig::builder()
         .wire_format_policy(openmls::group::MIXED_PLAINTEXT_WIRE_FORMAT_POLICY)
@@ -259,6 +265,7 @@ async fn new_key_package(
 ) -> KeyPackage {
     let cred_bundle = CredentialBundle::read(backend);
     let ciphersuite = Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
+    // TODO: set lifetime
     KeyPackage::builder()
         .build(
             CryptoConfig {
@@ -346,9 +353,7 @@ async fn run() {
             command: GroupCommand::Create { group_id },
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
-            let group_id = base64::decode(group_id)
-                .expect("Failed to decode group_id as base64");
-            let group_id = GroupId::from_slice(&group_id);
+            let group_id = group_id_from_str(&group_id);
             let group_config = default_configuration();
 
             let mut group = MlsGroup::new_with_group_id(
@@ -565,11 +570,21 @@ async fn run() {
             }
         }
         Command::ExternalProposal {
-            group_id: _,
-            epoch: _,
+            group_id,
+            epoch,
             command: ExternalProposalCommand::Add {},
         } => {
-            // TODO
+            let cred_bundle = CredentialBundle::read(&backend);
+            let key_package = new_key_package(&backend, None).await;
+            let group_id = group_id_from_str(&group_id);
+            let proposal = JoinProposal::new(
+                key_package,
+                group_id,
+                GroupEpoch::from(epoch),
+                &cred_bundle.keys,
+            )
+            .unwrap();
+            proposal.tls_serialize(&mut io::stdout()).unwrap();
         }
         Command::Commit {
             group: group_in,
