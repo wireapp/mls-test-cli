@@ -427,9 +427,9 @@ dependencies = [
 
 [[package]]
 name = "der"
-version = "0.7.4"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86b14af2045fa69ed2b7a48934bebb842d0f33e73e96e78766ecb14bb5347a11"
+checksum = "05e58dffcdcc8ee7b22f0c1f71a69243d7c2d9ad87b5a14361f2424a1565c219"
 dependencies = [
  "const-oid",
  "pem-rfc7468",
@@ -847,7 +847,7 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 [[package]]
 name = "openmls"
 version = "0.20.0"
-source = "git+https://github.com/wireapp/openmls?branch=feat/d20#75fcd3c8ccf22055ee93f70c5e995a8cb3ebcc06"
+source = "git+https://github.com/wireapp/openmls?branch=feat/d20#e0fabf6e157d96dd4d75cc57e4ce0cd429fad353"
 dependencies = [
  "async-trait",
  "backtrace",
@@ -863,7 +863,7 @@ dependencies = [
 [[package]]
 name = "openmls_basic_credential"
 version = "0.1.0"
-source = "git+https://github.com/wireapp/openmls?branch=feat/d20#75fcd3c8ccf22055ee93f70c5e995a8cb3ebcc06"
+source = "git+https://github.com/wireapp/openmls?branch=feat/d20#e0fabf6e157d96dd4d75cc57e4ce0cd429fad353"
 dependencies = [
  "async-trait",
  "ed25519-dalek",
@@ -881,7 +881,7 @@ dependencies = [
 [[package]]
 name = "openmls_memory_keystore"
 version = "0.1.0"
-source = "git+https://github.com/wireapp/openmls?branch=feat/d20#75fcd3c8ccf22055ee93f70c5e995a8cb3ebcc06"
+source = "git+https://github.com/wireapp/openmls?branch=feat/d20#e0fabf6e157d96dd4d75cc57e4ce0cd429fad353"
 dependencies = [
  "async-lock",
  "async-trait",
@@ -893,7 +893,7 @@ dependencies = [
 [[package]]
 name = "openmls_rust_crypto"
 version = "0.1.0"
-source = "git+https://github.com/wireapp/openmls?branch=feat/d20#75fcd3c8ccf22055ee93f70c5e995a8cb3ebcc06"
+source = "git+https://github.com/wireapp/openmls?branch=feat/d20#e0fabf6e157d96dd4d75cc57e4ce0cd429fad353"
 dependencies = [
  "aes-gcm 0.9.4",
  "chacha20poly1305 0.9.1",
@@ -917,7 +917,7 @@ dependencies = [
 [[package]]
 name = "openmls_traits"
 version = "0.1.0"
-source = "git+https://github.com/wireapp/openmls?branch=feat/d20#75fcd3c8ccf22055ee93f70c5e995a8cb3ebcc06"
+source = "git+https://github.com/wireapp/openmls?branch=feat/d20#e0fabf6e157d96dd4d75cc57e4ce0cd429fad353"
 dependencies = [
  "async-trait",
  "rand_core 0.6.4",
