@@ -68,7 +68,7 @@ impl CredentialBundle {
 }
 
 #[derive(Parser, Debug)]
-#[clap(name = "mls-test-cli", version = env!("FULL_VERSION"))]
+#[clap(name = "mls-test-cli", version = env!("CARGO_PKG_VERSION"))]
 struct Cli {
     #[clap(short, long)]
     store: String,
