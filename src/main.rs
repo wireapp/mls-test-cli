@@ -52,8 +52,8 @@ impl CredentialBundle {
     fn store(&self, backend: &TestBackend) {
         let ks = backend.key_store();
         let mut out = ks.store_bytes(b"self").unwrap();
-        self.credential.tls_serialize(&mut out).unwrap();
         self.keys.tls_serialize(&mut out).unwrap();
+        self.credential.tls_serialize(&mut out).unwrap();
     }
 
     fn read(backend: &TestBackend) -> Self {
@@ -61,8 +61,8 @@ impl CredentialBundle {
         let mut input = ks
             .read_bytes(b"self")
             .expect("Credential not initialised. Please run `init` first.");
-        let credential = Credential::tls_deserialize(&mut input).unwrap();
         let keys = SignatureKeyPair::tls_deserialize(&mut input).unwrap();
+        let credential = Credential::tls_deserialize(&mut input).unwrap();
         Self { credential, keys }
     }
 }
