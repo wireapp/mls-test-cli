@@ -1,6 +1,8 @@
 mod backend;
 mod keystore;
 
+use serde_json::json;
+
 use futures_lite::future;
 use openmls::prelude::group_info::VerifiableGroupInfo;
 use openmls::prelude::*;
@@ -308,7 +310,6 @@ async fn run() {
             // output key package to standard output
             key_package.tls_serialize(&mut io::stdout()).unwrap();
         }
-
         Command::Show {
             command: ShowCommand::Message { file },
         } => {
@@ -316,7 +317,32 @@ async fn run() {
                 let mut data = path_reader(&file).unwrap();
                 MlsMessageIn::tls_deserialize(&mut data).unwrap()
             };
-            println!("{:#?}", message);
+            match message.extract() {
+                MlsMessageInBody::PublicMessage(pmsg) => {
+                    let v = serde_json::to_value(&pmsg).unwrap();
+                    let obj = json!({ "type": "public_message",
+                                      "message": v });
+                    serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+                }
+                MlsMessageInBody::PrivateMessage(_) => {
+                    let obj = json!({ "type": "private_message" });
+                    serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+                }
+                MlsMessageInBody::Welcome(_) => {
+                    let obj = json!({ "type": "welcome" });
+                    serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+                }
+                MlsMessageInBody::GroupInfo(_) => {
+                    let obj = json!({ "type": "group_info" });
+                    serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+                }
+                MlsMessageInBody::KeyPackage(kp) => {
+                    let v = serde_json::to_value(&kp).unwrap();
+                    let obj = json!({ "type": "key_package",
+                                      "message": v });
+                    serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+                }
+            }
         }
         Command::Show {
             command: ShowCommand::KeyPackage { file },
