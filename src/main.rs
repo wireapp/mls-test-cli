@@ -41,8 +41,7 @@ impl CredentialBundle {
     }
 
     fn new(backend: &impl OpenMlsCryptoProvider, client_id: ClientId) -> Self {
-        let credential =
-            Credential::new(client_id.0, CredentialType::Basic).unwrap();
+        let credential = Credential::new_basic(client_id.0);
         let keys = SignatureKeyPair::new(
             SignatureScheme::ED25519,
             &mut *backend.rand().borrow_rand().unwrap(),
@@ -246,6 +245,17 @@ fn path_reader(path: &str) -> io::Result<Box<dyn Read>> {
     }
 }
 
+fn save_group<W: Write>(group: &MlsGroup, mut writer: W) {
+    let json = serde_json::to_string_pretty(&group).unwrap();
+    writer.write_all(&json.into_bytes()).unwrap();
+}
+
+fn load_group<R: Read>(reader: R) -> MlsGroup {
+    #[allow(deprecated)]
+    let group: SerializedMlsGroup = serde_json::from_reader(reader).unwrap();
+    group.into()
+}
+
 fn group_id_from_str(group_id: &str) -> GroupId {
     let group_id =
         base64::decode(group_id).expect("Failed to decode group_id as base64");
@@ -351,7 +361,9 @@ async fn run() {
                 let mut data = path_reader(&file).unwrap();
                 let key_package =
                     KeyPackageIn::tls_deserialize(&mut data).unwrap();
-                key_package.validate(backend.crypto()).unwrap();
+                key_package
+                    .validate(backend.crypto(), ProtocolVersion::Mls10)
+                    .unwrap();
             };
             println!("{:#?}", kp);
         }
@@ -360,7 +372,9 @@ async fn run() {
         } => {
             let mut data = path_reader(&key_package).unwrap();
             let key_package = KeyPackageIn::tls_deserialize(&mut data).unwrap();
-            let key_package = key_package.validate(backend.crypto()).unwrap();
+            let key_package = key_package
+                .validate(backend.crypto(), ProtocolVersion::Mls10)
+                .unwrap();
             io::stdout()
                 .write_all(
                     key_package.hash_ref(backend.crypto()).unwrap().as_slice(),
@@ -381,9 +395,7 @@ async fn run() {
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
             let group_id = group_id_from_str(&group_id);
-            let backend_credential =
-                Credential::new(b"backend".to_vec(), CredentialType::Basic)
-                    .unwrap();
+            let backend_credential = Credential::new_basic(b"backend".to_vec());
             let external_senders = match removal_key {
                 Some(removal_key) => {
                     let removal_key = {
@@ -400,7 +412,7 @@ async fn run() {
             };
             let group_config = build_configuration(external_senders);
 
-            let mut group = MlsGroup::new_with_group_id(
+            let group = MlsGroup::new_with_group_id(
                 &backend,
                 &cred_bundle.keys,
                 &group_config,
@@ -409,7 +421,8 @@ async fn run() {
             )
             .await
             .unwrap();
-            group.save(&mut io::stdout()).unwrap();
+
+            save_group(&group, &mut io::stdout());
         }
         Command::Group {
             command: GroupCommand::FromWelcome { welcome, group_out },
@@ -425,7 +438,7 @@ async fn run() {
                     panic!("expected welcome")
                 }
             };
-            let mut group = MlsGroup::new_from_welcome(
+            let group = MlsGroup::new_from_welcome(
                 &backend,
                 &group_config,
                 welcome,
@@ -434,7 +447,7 @@ async fn run() {
             .await
             .unwrap();
             let mut group_out = fs::File::create(group_out).unwrap();
-            group.save(&mut group_out).unwrap();
+            save_group(&group, &mut group_out);
         }
         Command::Member {
             command:
@@ -450,7 +463,7 @@ async fn run() {
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
                 let data = path_reader(&group_in).unwrap();
-                MlsGroup::load(data).unwrap()
+                load_group(data)
             };
             let kps = key_packages
                 .into_iter()
@@ -460,7 +473,8 @@ async fn run() {
                         kp
                     ));
                     let kp = KeyPackageIn::tls_deserialize(&mut data).unwrap();
-                    kp.validate(backend.crypto()).unwrap()
+                    kp.validate(backend.crypto(), ProtocolVersion::Mls10)
+                        .unwrap()
                 })
                 .collect::<Vec<_>>();
 
@@ -488,7 +502,7 @@ async fn run() {
             if let Some(group_out) = group_out {
                 let mut writer = fs::File::create(group_out).unwrap();
                 group.merge_pending_commit(&backend).await.unwrap();
-                group.save(&mut writer).unwrap();
+                save_group(&group, &mut writer);
             }
 
             if let (Some(group_info_out), Some(group_info)) =
@@ -514,7 +528,7 @@ async fn run() {
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
                 let data = path_reader(&group_in).unwrap();
-                MlsGroup::load(data).unwrap()
+                load_group(data)
             };
 
             let indices = indices
@@ -531,7 +545,7 @@ async fn run() {
             if let Some(group_out) = group_out {
                 let mut writer = fs::File::create(group_out).unwrap();
                 group.merge_pending_commit(&backend).await.unwrap();
-                group.save(&mut writer).unwrap();
+                save_group(&group, &mut writer);
             }
 
             if let Some(welcome_out) = welcome_out {
@@ -554,7 +568,7 @@ async fn run() {
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
                 let data = path_reader(&group).unwrap();
-                MlsGroup::load(data).unwrap()
+                load_group(data)
             };
             let message = group
                 .create_message(&backend, &cred_bundle.keys, text.as_bytes())
@@ -570,12 +584,13 @@ async fn run() {
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
                 let data = path_reader(&group_in).unwrap();
-                MlsGroup::load(data).unwrap()
+                load_group(data)
             };
             let key_package = {
                 let mut data = path_reader(&key_package).unwrap();
                 let kp = KeyPackageIn::tls_deserialize(&mut data).unwrap();
-                kp.validate(backend.crypto()).unwrap()
+                kp.validate(backend.crypto(), ProtocolVersion::Mls10)
+                    .unwrap()
             };
             let (message, _) = group
                 .propose_add_member(&backend, &cred_bundle.keys, &key_package)
@@ -585,7 +600,7 @@ async fn run() {
             let group_out = if in_place { Some(group_in) } else { group_out };
             if let Some(group_out) = group_out {
                 let mut writer = fs::File::create(group_out).unwrap();
-                group.save(&mut writer).unwrap();
+                save_group(&group, &mut writer);
             }
         }
         Command::Proposal {
@@ -598,7 +613,7 @@ async fn run() {
             let index = LeafNodeIndex::new(index);
             let mut group = {
                 let data = path_reader(&group_in).unwrap();
-                MlsGroup::load(data).unwrap()
+                load_group(data)
             };
             let message = group
                 .propose_remove_member(&backend, &cred_bundle.keys, index)
@@ -608,7 +623,7 @@ async fn run() {
             let group_out = if in_place { Some(group_in) } else { group_out };
             if let Some(group_out) = group_out {
                 let mut writer = fs::File::create(group_out).unwrap();
-                group.save(&mut writer).unwrap();
+                save_group(&group, &mut writer);
             }
         }
         Command::ExternalProposal {
@@ -638,7 +653,7 @@ async fn run() {
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
                 let data = path_reader(&group_in).unwrap();
-                MlsGroup::load(data).unwrap()
+                load_group(data)
             };
 
             let (message, welcome, group_info) = group
@@ -658,7 +673,7 @@ async fn run() {
             if let Some(group_out) = group_out {
                 let mut writer = fs::File::create(group_out).unwrap();
                 group.merge_pending_commit(&backend).await.unwrap();
-                group.save(&mut writer).unwrap();
+                save_group(&group, &mut writer);
             }
 
             if let (Some(group_info_out), Some(group_info)) =
@@ -697,7 +712,7 @@ async fn run() {
             if let Some(group_out) = group_out {
                 let mut writer = fs::File::create(group_out).unwrap();
                 group.merge_pending_commit(&backend).await.unwrap();
-                group.save(&mut writer).unwrap();
+                save_group(&group, &mut writer);
             }
 
             if let (Some(group_info_out), Some(group_info)) =
@@ -716,7 +731,7 @@ async fn run() {
         } => {
             let mut group = {
                 let data = path_reader(&group_in).unwrap();
-                MlsGroup::load(data).unwrap()
+                load_group(data)
             };
 
             // parse and verify message
@@ -757,7 +772,7 @@ async fn run() {
             let group_out = if in_place { Some(group_in) } else { group_out };
             if let Some(group_out) = group_out {
                 let mut writer = fs::File::create(group_out).unwrap();
-                group.save(&mut writer).unwrap();
+                save_group(&group, &mut writer);
             }
         }
     }
