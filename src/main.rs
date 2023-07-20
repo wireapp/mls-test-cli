@@ -15,6 +15,12 @@ use io::Read;
 use io::Write;
 use std::fs;
 use std::io;
+use std::path::PathBuf;
+
+// static DEFAULT_CIPHERSUITE: Ciphersuite =
+//     Ciphersuite::MLS_128_X25519KYBER768DRAFT00_AES128GCM_SHA256_Ed25519;
+static DEFAULT_CIPHERSUITE: Ciphersuite =
+    Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
 
 #[derive(Debug)]
 struct ClientId(Vec<u8>);
@@ -51,19 +57,19 @@ impl CredentialBundle {
     }
 
     fn store(&self, backend: &TestBackend) {
-        let ks = backend.key_store();
-        let mut out = ks.store_bytes(b"self").unwrap();
-        self.keys.tls_serialize(&mut out).unwrap();
-        self.credential.tls_serialize(&mut out).unwrap();
+        backend
+            .key_store()
+            .store_value(b"self", &(&self.keys, &self.credential))
+            .unwrap();
     }
 
     fn read(backend: &TestBackend) -> Self {
         let ks = backend.key_store();
-        let mut input = ks
-            .read_bytes(b"self")
+        let (keys, credential) = ks
+            .read_value(b"self")
+            .ok()
+            .flatten()
             .expect("Credential not initialised. Please run `init` first.");
-        let keys = SignatureKeyPair::tls_deserialize(&mut input).unwrap();
-        let credential = Credential::tls_deserialize(&mut input).unwrap();
         Self { credential, keys }
     }
 }
@@ -273,6 +279,7 @@ fn build_configuration(
         .sender_ratchet_configuration(SenderRatchetConfiguration::new(2, 5))
         .use_ratchet_tree_extension(true)
         .external_senders(external_senders)
+        .crypto_config(CryptoConfig::with_default_version(DEFAULT_CIPHERSUITE))
         .build()
 }
 
@@ -281,7 +288,7 @@ async fn new_key_package(
     _lifetime: Option<u64>,
 ) -> KeyPackage {
     let cred_bundle = CredentialBundle::read(backend);
-    let ciphersuite = Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
+    let ciphersuite = DEFAULT_CIPHERSUITE;
     // TODO: set lifetime
     KeyPackage::builder()
         .build(
@@ -299,7 +306,7 @@ async fn new_key_package(
 
 async fn run() {
     let cli = Cli::parse();
-    let backend = TestBackend::new(&cli.store).unwrap();
+    let backend = TestBackend::new(PathBuf::from(&cli.store)).unwrap();
     match cli.command {
         Command::Init { client_id } => {
             let ks = backend.key_store();
@@ -428,10 +435,19 @@ async fn run() {
             command: GroupCommand::FromWelcome { welcome, group_out },
         } => {
             let group_config = build_configuration(vec![]);
+
+            // let message = {
+            //     let mut r = path_reader(&welcome).unwrap();
+            //     let mut data = Vec::new();
+            //     r.read_to_end(&mut data).unwrap();
+            //     MlsMessageIn::tls_deserialize(&mut &data[..]).unwrap()
+            // };
+
             let message = MlsMessageIn::tls_deserialize(
                 &mut path_reader(&welcome).unwrap(),
             )
             .unwrap();
+
             let welcome = match message.extract() {
                 MlsMessageInBody::Welcome(welcome) => welcome,
                 _ => {

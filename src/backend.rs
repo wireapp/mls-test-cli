@@ -2,18 +2,30 @@ use crate::keystore::TestKeyStore;
 use openmls::prelude::OpenMlsCryptoProvider;
 use openmls_rust_crypto::RustCrypto;
 
-use std::path::Path;
+use std::fs::File;
+use std::path::PathBuf;
 
 pub struct TestBackend {
     crypto: RustCrypto,
+    path: PathBuf,
     key_store: TestKeyStore,
 }
 
 impl TestBackend {
-    pub fn new<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
+    pub fn new(path: PathBuf) -> std::io::Result<Self> {
         let crypto = RustCrypto::default();
-        let key_store = TestKeyStore::create(path)?;
-        Ok(TestBackend { crypto, key_store })
+        let key_store = TestKeyStore::read(&mut File::open(&path).unwrap());
+        Ok(TestBackend {
+            crypto,
+            path: path,
+            key_store,
+        })
+    }
+}
+
+impl Drop for TestBackend {
+    fn drop(&mut self) {
+        self.key_store.write(&mut File::create(&self.path).unwrap());
     }
 }
 
