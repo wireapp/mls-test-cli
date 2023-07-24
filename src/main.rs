@@ -191,6 +191,8 @@ enum GroupCommand {
         group_id: String,
         #[clap(short, long)]
         removal_key: Option<String>,
+        #[clap(short, long, default_value = "-")]
+        group_out: String,
     },
     FromWelcome {
         welcome: String,
@@ -248,6 +250,14 @@ fn path_reader(path: &str) -> io::Result<Box<dyn Read>> {
         Ok(Box::new(io::stdin()))
     } else {
         Ok(Box::new(fs::File::open(path)?))
+    }
+}
+
+fn path_writer(path: &str) -> io::Result<Box<dyn Write>> {
+    if path == "-" {
+        Ok(Box::new(io::stdout()))
+    } else {
+        Ok(Box::new(fs::File::create(path)?))
     }
 }
 
@@ -398,6 +408,7 @@ async fn run() {
                 GroupCommand::Create {
                     group_id,
                     removal_key,
+                    group_out,
                 },
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
@@ -429,7 +440,7 @@ async fn run() {
             .await
             .unwrap();
 
-            save_group(&group, &mut io::stdout());
+            save_group(&group, &mut path_writer(&group_out).unwrap());
         }
         Command::Group {
             command: GroupCommand::FromWelcome { welcome, group_out },
