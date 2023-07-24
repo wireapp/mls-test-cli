@@ -38,7 +38,6 @@ pub struct TestKeyStore(Mutex<HashMap<Key, Value>>);
 impl std::error::Error for TestKeyStoreError {}
 
 impl TestKeyStore {
-    #[cfg(test)]
     pub fn new() -> Self {
         TestKeyStore(Mutex::new(HashMap::new()))
     }
