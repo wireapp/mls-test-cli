@@ -17,10 +17,10 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
-// static DEFAULT_CIPHERSUITE: Ciphersuite =
-//     Ciphersuite::MLS_128_X25519KYBER768DRAFT00_AES128GCM_SHA256_Ed25519;
 static DEFAULT_CIPHERSUITE: Ciphersuite =
-    Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
+    Ciphersuite::MLS_128_X25519KYBER768DRAFT00_AES128GCM_SHA256_Ed25519;
+// static DEFAULT_CIPHERSUITE: Ciphersuite =
+//     Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
 
 #[derive(Debug)]
 struct ClientId(Vec<u8>);
@@ -237,6 +237,8 @@ enum ProposalCommand {
     Add { key_package: String },
     /// Create a remove proposal
     Remove { index: u32 },
+    /// Create a re-init proposal
+    ReInit,
 }
 
 #[derive(Subcommand, Debug)]
@@ -644,6 +646,34 @@ async fn run() {
             };
             let message = group
                 .propose_remove_member(&backend, &cred_bundle.keys, index)
+                .unwrap();
+            message.tls_serialize(&mut io::stdout()).unwrap();
+
+            let group_out = if in_place { Some(group_in) } else { group_out };
+            if let Some(group_out) = group_out {
+                let mut writer = fs::File::create(group_out).unwrap();
+                save_group(&group, &mut writer);
+            }
+        }
+        Command::Proposal {
+            group_in,
+            group_out,
+            in_place,
+            command: ProposalCommand::ReInit,
+        } => {
+            let cred_bundle = CredentialBundle::read(&backend);
+            let mut group = {
+                let data = path_reader(&group_in).unwrap();
+                load_group(data)
+            };
+            let (message, _) = group
+                .propose_reinit(
+                    &backend,
+                    &cred_bundle.keys,
+                    Extensions::empty(),
+                    DEFAULT_CIPHERSUITE,
+                    ProtocolVersion::Mls10,
+                )
                 .unwrap();
             message.tls_serialize(&mut io::stdout()).unwrap();
 
