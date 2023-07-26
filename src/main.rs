@@ -18,9 +18,7 @@ use std::io;
 use std::path::PathBuf;
 
 static DEFAULT_CIPHERSUITE: Ciphersuite =
-    Ciphersuite::MLS_128_X25519KYBER768DRAFT00_AES128GCM_SHA256_Ed25519;
-// static DEFAULT_CIPHERSUITE: Ciphersuite =
-//     Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
+    Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
 
 #[derive(Debug)]
 struct ClientId(Vec<u8>);
@@ -127,6 +125,8 @@ enum Command {
         epoch: u64,
         #[clap(subcommand)]
         command: ExternalProposalCommand,
+        #[clap(short, long, default_value = "0x0001")]
+        ciphersuite: String,
     },
     /// Create a commit that references all pending proposals
     Commit {
@@ -149,6 +149,8 @@ enum Command {
         group_info_out: Option<String>,
         #[clap(long)]
         group_out: Option<String>,
+        #[clap(short, long, default_value = "0x0001")]
+        ciphersuite: String,
     },
     /// Receive and store an incoming message.
     Consume {
@@ -180,6 +182,8 @@ enum KeyPackageCommand {
         /// How long in seconds will the key package be valid
         #[clap(short, long)]
         lifetime: Option<u64>,
+        #[clap(short, long, default_value = "0x0001")]
+        ciphersuite: String,
     },
     /// Compute the hash of a key package.
     Ref { key_package: String },
@@ -193,6 +197,8 @@ enum GroupCommand {
         removal_key: Option<String>,
         #[clap(short, long, default_value = "-")]
         group_out: String,
+        #[clap(short, long, default_value = "0x0001")]
+        ciphersuite: String,
     },
     FromWelcome {
         welcome: String,
@@ -282,6 +288,7 @@ fn group_id_from_str(group_id: &str) -> GroupId {
 
 fn build_configuration(
     external_senders: Vec<ExternalSender>,
+    ciphersuite: Ciphersuite,
 ) -> MlsGroupConfig {
     MlsGroupConfig::builder()
         .wire_format_policy(openmls::group::MIXED_PLAINTEXT_WIRE_FORMAT_POLICY)
@@ -291,16 +298,22 @@ fn build_configuration(
         .sender_ratchet_configuration(SenderRatchetConfiguration::new(2, 5))
         .use_ratchet_tree_extension(true)
         .external_senders(external_senders)
-        .crypto_config(CryptoConfig::with_default_version(DEFAULT_CIPHERSUITE))
+        .crypto_config(CryptoConfig::with_default_version(ciphersuite))
         .build()
+}
+
+fn parse_ciphersuite(s: &str) -> Result<Ciphersuite, String> {
+    let s = s.trim_start_matches("0x");
+    let n = u16::from_str_radix(s, 16).map_err(|e| e.to_string())?;
+    Ciphersuite::try_from(n).map_err(|e| e.to_string())
 }
 
 async fn new_key_package(
     backend: &TestBackend,
     _lifetime: Option<u64>,
+    ciphersuite: Ciphersuite,
 ) -> KeyPackage {
     let cred_bundle = CredentialBundle::read(backend);
-    let ciphersuite = DEFAULT_CIPHERSUITE;
     // TODO: set lifetime
     KeyPackage::builder()
         .build(
@@ -332,9 +345,15 @@ async fn run() {
             }
         }
         Command::KeyPackage {
-            command: KeyPackageCommand::Create { lifetime },
+            command:
+                KeyPackageCommand::Create {
+                    lifetime,
+                    ciphersuite,
+                },
         } => {
-            let key_package = new_key_package(&backend, lifetime).await;
+            let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
+            let key_package =
+                new_key_package(&backend, lifetime, ciphersuite).await;
 
             // output key package to standard output
             key_package.tls_serialize(&mut io::stdout()).unwrap();
@@ -411,6 +430,7 @@ async fn run() {
                     group_id,
                     removal_key,
                     group_out,
+                    ciphersuite,
                 },
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
@@ -430,7 +450,9 @@ async fn run() {
                 }
                 None => vec![],
             };
-            let group_config = build_configuration(external_senders);
+            let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
+            let group_config =
+                build_configuration(external_senders, ciphersuite);
 
             let group = MlsGroup::new_with_group_id(
                 &backend,
@@ -447,15 +469,6 @@ async fn run() {
         Command::Group {
             command: GroupCommand::FromWelcome { welcome, group_out },
         } => {
-            let group_config = build_configuration(vec![]);
-
-            // let message = {
-            //     let mut r = path_reader(&welcome).unwrap();
-            //     let mut data = Vec::new();
-            //     r.read_to_end(&mut data).unwrap();
-            //     MlsMessageIn::tls_deserialize(&mut &data[..]).unwrap()
-            // };
-
             let message = MlsMessageIn::tls_deserialize(
                 &mut path_reader(&welcome).unwrap(),
             )
@@ -467,6 +480,10 @@ async fn run() {
                     panic!("expected welcome")
                 }
             };
+
+            let ciphersuite = welcome.ciphersuite();
+            let group_config = build_configuration(vec![], ciphersuite);
+
             let group = MlsGroup::new_from_welcome(
                 &backend,
                 &group_config,
@@ -687,9 +704,12 @@ async fn run() {
             group_id,
             epoch,
             command: ExternalProposalCommand::Add {},
+            ciphersuite,
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
-            let key_package = new_key_package(&backend, None).await;
+            let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
+            let key_package =
+                new_key_package(&backend, None, ciphersuite).await;
             let group_id = group_id_from_str(&group_id);
             let proposal = JoinProposal::new(
                 key_package,
@@ -744,6 +764,7 @@ async fn run() {
             group_info_in,
             group_info_out,
             group_out,
+            ciphersuite,
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
             let group_info = {
@@ -751,13 +772,14 @@ async fn run() {
                 VerifiableGroupInfo::tls_deserialize(&mut data).unwrap()
             };
 
+            let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
             let (mut group, message, group_info) =
                 MlsGroup::join_by_external_commit(
                     &backend,
                     &cred_bundle.keys,
                     None,
                     group_info,
-                    &build_configuration(vec![]),
+                    &build_configuration(vec![], ciphersuite),
                     &[],
                     cred_bundle.credential_with_key(),
                 )
