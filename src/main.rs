@@ -17,9 +17,6 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
-static DEFAULT_CIPHERSUITE: Ciphersuite =
-    Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
-
 #[derive(Debug)]
 struct ClientId(Vec<u8>);
 
@@ -244,7 +241,7 @@ enum ProposalCommand {
     /// Create a remove proposal
     Remove { index: u32 },
     /// Create a re-init proposal
-    ReInit,
+    ReInit { ciphersuite: Option<String> },
 }
 
 #[derive(Subcommand, Debug)]
@@ -676,19 +673,23 @@ async fn run() {
             group_in,
             group_out,
             in_place,
-            command: ProposalCommand::ReInit,
+            command: ProposalCommand::ReInit { ciphersuite },
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
                 let data = path_reader(&group_in).unwrap();
                 load_group(data)
             };
+            let ciphersuite = match ciphersuite {
+                Some(ciphersuite) => parse_ciphersuite(&ciphersuite).unwrap(),
+                None => group.ciphersuite(),
+            };
             let (message, _) = group
                 .propose_reinit(
                     &backend,
                     &cred_bundle.keys,
                     Extensions::empty(),
-                    DEFAULT_CIPHERSUITE,
+                    ciphersuite,
                     ProtocolVersion::Mls10,
                 )
                 .unwrap();
