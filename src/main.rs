@@ -401,9 +401,9 @@ async fn run() {
                     KeyPackageIn::tls_deserialize(&mut data).unwrap();
                 key_package
                     .validate(backend.crypto(), ProtocolVersion::Mls10)
-                    .unwrap();
+                    .unwrap()
             };
-            println!("{:#?}", kp);
+            serde_json::to_writer_pretty(io::stdout(), &kp).unwrap();
         }
         Command::KeyPackage {
             command: KeyPackageCommand::Ref { key_package },
