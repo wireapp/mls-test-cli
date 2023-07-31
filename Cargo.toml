@@ -46,7 +46,8 @@ branch = "feat/d20"
 # git = "https://github.com/franziskuskiefer/hpke-rs.git"
 
 [patch.crates-io.tls_codec]
-path = "../formats/tls_codec"
+git = "https://github.com/wireapp/formats"
+branch = "pcapriotti/fix-quic-vec-rw"
 
 [dev-dependencies]
 tempdir = "0.3"

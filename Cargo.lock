@@ -1668,6 +1668,7 @@ dependencies = [
 [[package]]
 name = "tls_codec"
 version = "0.3.0"
+source = "git+https://github.com/wireapp/formats?branch=pcapriotti/fix-quic-vec-rw#5065a28f424fc8a28812009009fc108fdd7e6745"
 dependencies = [
  "serde",
  "tls_codec_derive",
@@ -1677,6 +1678,7 @@ dependencies = [
 [[package]]
 name = "tls_codec_derive"
 version = "0.3.0"
+source = "git+https://github.com/wireapp/formats?branch=pcapriotti/fix-quic-vec-rw#5065a28f424fc8a28812009009fc108fdd7e6745"
 dependencies = [
  "proc-macro2",
  "quote",
