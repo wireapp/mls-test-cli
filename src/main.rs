@@ -41,10 +41,14 @@ impl CredentialBundle {
         }
     }
 
-    fn new(backend: &impl OpenMlsCryptoProvider, client_id: ClientId) -> Self {
+    fn new(
+        backend: &impl OpenMlsCryptoProvider,
+        client_id: ClientId,
+        ciphersuite: Ciphersuite,
+    ) -> Self {
         let credential = Credential::new_basic(client_id.0);
         let keys = SignatureKeyPair::new(
-            SignatureScheme::ED25519,
+            ciphersuite.signature_algorithm(),
             &mut *backend.rand().borrow_rand().unwrap(),
         )
         .unwrap();
@@ -82,6 +86,8 @@ struct Cli {
 enum Command {
     Init {
         client_id: ClientId,
+        #[clap(short, long, default_value = "0x0001")]
+        ciphersuite: String,
     },
     Show {
         #[clap(subcommand)]
@@ -330,14 +336,19 @@ async fn run() {
     let cli = Cli::parse();
     let backend = TestBackend::new(PathBuf::from(&cli.store)).unwrap();
     match cli.command {
-        Command::Init { client_id } => {
+        Command::Init {
+            client_id,
+            ciphersuite,
+        } => {
+            let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
             let ks = backend.key_store();
             match ks.read::<SignatureKeyPair>(b"self").await {
                 Some(_) => {
                     panic!("Credential already initialised");
                 }
                 None => {
-                    CredentialBundle::new(&backend, client_id).store(&backend);
+                    CredentialBundle::new(&backend, client_id, ciphersuite)
+                        .store(&backend);
                 }
             }
         }
