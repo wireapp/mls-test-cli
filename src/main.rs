@@ -28,6 +28,24 @@ impl core::str::FromStr for ClientId {
 }
 
 #[derive(Debug)]
+enum CredentialType {
+    Basic,
+    X509,
+}
+
+impl core::str::FromStr for CredentialType {
+    type Err = String;
+
+    fn from_str(x: &str) -> Result<Self, String> {
+        match x {
+            "basic" => Ok(Self::Basic),
+            "x509" => Ok(Self::X509),
+            _ => Err(format!("Invalid credential type {}", x)),
+        }
+    }
+}
+
+#[derive(Debug)]
 struct CredentialBundle {
     credential: Credential,
     keys: SignatureKeyPair,
@@ -43,10 +61,16 @@ impl CredentialBundle {
 
     fn new(
         backend: &impl OpenMlsCryptoProvider,
+        credential_type: CredentialType,
         client_id: ClientId,
         ciphersuite: Ciphersuite,
     ) -> Self {
-        let credential = Credential::new_basic(client_id.0);
+        let credential = match credential_type {
+            CredentialType::Basic => Credential::new_basic(client_id.0),
+            CredentialType::X509 => {
+                Credential::new_x509(client_id.0, Vec::new()).unwrap()
+            }
+        };
         let keys = SignatureKeyPair::new(
             ciphersuite.signature_algorithm(),
             &mut *backend.rand().borrow_rand().unwrap(),
@@ -86,6 +110,8 @@ struct Cli {
 enum Command {
     Init {
         client_id: ClientId,
+        #[clap(short, long, default_value = "basic")]
+        credential_type: CredentialType,
         #[clap(short, long, default_value = "0x0001")]
         ciphersuite: String,
     },
@@ -338,6 +364,7 @@ async fn run() {
     match cli.command {
         Command::Init {
             client_id,
+            credential_type,
             ciphersuite,
         } => {
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
@@ -347,8 +374,13 @@ async fn run() {
                     panic!("Credential already initialised");
                 }
                 None => {
-                    CredentialBundle::new(&backend, client_id, ciphersuite)
-                        .store(&backend);
+                    CredentialBundle::new(
+                        &backend,
+                        credential_type,
+                        client_id,
+                        ciphersuite,
+                    )
+                    .store(&backend);
                 }
             }
         }
