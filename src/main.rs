@@ -110,7 +110,7 @@ struct Cli {
 enum Command {
     Init {
         client_id: ClientId,
-        #[clap(short, long, default_value = "basic")]
+        #[clap(short = 't', long, default_value = "basic")]
         credential_type: CredentialType,
         #[clap(short, long, default_value = "0x0001")]
         ciphersuite: String,
@@ -369,7 +369,7 @@ async fn run() {
         } => {
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
             let ks = backend.key_store();
-            match ks.read::<SignatureKeyPair>(b"self").await {
+            match ks.read_value::<serde_json::Value>(b"self").unwrap() {
                 Some(_) => {
                     panic!("Credential already initialised");
                 }
