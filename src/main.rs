@@ -20,8 +20,7 @@ use uuid::Uuid;
 
 #[derive(Debug)]
 struct ClientId {
-    user: String,
-    client: String,
+    user: String, client: String,
     domain: String,
 }
 
@@ -50,14 +49,14 @@ impl ClientId {
         out
     }
 
-    fn to_x509(&self) -> String {
+    fn to_x509(&self, handle: &str) -> String {
         let uid = base64::encode_config(
             Uuid::parse_str(&self.user).unwrap().to_bytes_le(),
             base64::URL_SAFE_NO_PAD,
         );
         format!(
             "subjectAltName=URI:im:wireapp={}/{}@{}, URI:im:wireapp=%40{}@{}",
-            uid, self.client, self.domain, self.user, self.domain
+            uid, self.client, self.domain, handle, self.domain
         )
     }
 }
@@ -99,14 +98,16 @@ impl CredentialBundle {
         credential_type: CredentialType,
         client_id: ClientId,
         ciphersuite: Ciphersuite,
+        handle: Option<String>,
     ) -> Self {
         let credential = match credential_type {
             CredentialType::Basic => Credential::new_basic(client_id.to_vec()),
             CredentialType::X509 => {
                 // generate a self-signed certificate
+                let handle = handle.unwrap_or(client_id.user.clone());
                 let subject =
-                    format!("/O={}/CN={}", client_id.domain, client_id.user);
-                let san = client_id.to_x509();
+                    format!("/O={}/CN={}", client_id.domain, handle);
+                let san = client_id.to_x509(&handle);
                 let cert = std::process::Command::new("openssl")
                     .args([
                         "req",
@@ -182,6 +183,8 @@ enum Command {
         credential_type: CredentialType,
         #[clap(short, long, default_value = "0x0001")]
         ciphersuite: String,
+        #[clap(long)]
+        handle: Option<String>,
     },
     Show {
         #[clap(subcommand)]
@@ -434,6 +437,7 @@ async fn run() {
             client_id,
             credential_type,
             ciphersuite,
+            handle,
         } => {
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
             let ks = backend.key_store();
@@ -447,6 +451,7 @@ async fn run() {
                         credential_type,
                         client_id,
                         ciphersuite,
+                        handle,
                     )
                     .store(&backend);
                 }
