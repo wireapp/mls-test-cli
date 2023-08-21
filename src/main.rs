@@ -16,14 +16,49 @@ use io::Write;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use uuid::Uuid;
 
 #[derive(Debug)]
-struct ClientId(Vec<u8>);
+struct ClientId {
+    user: String,
+    client: String,
+    domain: String,
+}
 
 impl core::str::FromStr for ClientId {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, String> {
-        Ok(ClientId(s.as_bytes().to_vec()))
+        let dom_index = s.find('@').ok_or("No domain separator")?;
+        let cli_index =
+            s[0..dom_index].find(':').ok_or("No client ID separator")?;
+        Ok(ClientId {
+            user: s[0..cli_index].to_string(),
+            client: s[cli_index + 1..dom_index].to_string(),
+            domain: s[dom_index + 1..].to_string(),
+        })
+    }
+}
+
+impl ClientId {
+    fn to_vec(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend(self.user.bytes());
+        out.push(b':');
+        out.extend(self.client.bytes());
+        out.push(b'@');
+        out.extend(self.domain.bytes());
+        out
+    }
+
+    fn to_x509(&self) -> String {
+        let uid = base64::encode_config(
+            Uuid::parse_str(&self.user).unwrap().to_bytes_le(),
+            base64::URL_SAFE_NO_PAD,
+        );
+        format!(
+            "subjectAltName=URI:im:wireapp={}/{}@{}, URI:im:wireapp=%40{}@{}",
+            uid, self.client, self.domain, self.user, self.domain
+        )
     }
 }
 
@@ -66,9 +101,42 @@ impl CredentialBundle {
         ciphersuite: Ciphersuite,
     ) -> Self {
         let credential = match credential_type {
-            CredentialType::Basic => Credential::new_basic(client_id.0),
+            CredentialType::Basic => Credential::new_basic(client_id.to_vec()),
             CredentialType::X509 => {
-                Credential::new_x509(client_id.0, Vec::new()).unwrap()
+                // generate a self-signed certificate
+                let subject =
+                    format!("/O={}/CN={}", client_id.domain, client_id.user);
+                let san = client_id.to_x509();
+                let cert = std::process::Command::new("openssl")
+                    .args([
+                        "req",
+                        "-x509",
+                        "-newkey",
+                        "rsa:4096",
+                        "-sha256",
+                        "-days",
+                        "3650",
+                        "-nodes",
+                        "-keyout",
+                        "/dev/null",
+                        "-out",
+                        "/dev/stdout",
+                        "-subj",
+                        &subject,
+                        "-addext",
+                        &san,
+                    ])
+                    .stdin(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .output()
+                    .unwrap()
+                    .stdout;
+                std::io::stderr().write_all(&cert).unwrap();
+                Credential::new_x509(
+                    client_id.to_vec(),
+                    vec![cert.clone(), cert],
+                )
+                .unwrap()
             }
         };
         let keys = SignatureKeyPair::new(
