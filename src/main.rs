@@ -50,8 +50,9 @@ impl ClientId {
     }
 
     fn to_x509(&self, handle: &str) -> String {
+        let uuid = Uuid::parse_str(&self.user).unwrap();
         let uid = base64::encode_config(
-            Uuid::parse_str(&self.user).unwrap().to_bytes_le(),
+            uuid.into_bytes(),
             base64::URL_SAFE_NO_PAD,
         );
         format!(
