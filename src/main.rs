@@ -123,6 +123,8 @@ impl CredentialBundle {
                         "/dev/null",
                         "-out",
                         "/dev/stdout",
+                        "-outform",
+                        "DER",
                         "-subj",
                         &subject,
                         "-addext",
