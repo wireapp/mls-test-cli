@@ -132,7 +132,6 @@ impl CredentialBundle {
                     .output()
                     .unwrap()
                     .stdout;
-                std::io::stderr().write_all(&cert).unwrap();
                 Credential::new_x509(
                     client_id.to_vec(),
                     vec![cert.clone(), cert],
