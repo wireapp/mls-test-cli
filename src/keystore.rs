@@ -96,11 +96,11 @@ impl From<std::io::Error> for TestKeyStoreError {
     }
 }
 
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 impl OpenMlsKeyStore for TestKeyStore {
     type Error = TestKeyStoreError;
 
-    async fn store<V: MlsEntity>(
+    async fn store<V: MlsEntity + Sync>(
         &self,
         k: &[u8],
         v: &V,
