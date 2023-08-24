@@ -1018,7 +1018,7 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 [[package]]
 name = "openmls"
 version = "1.0.0"
-source = "git+https://github.com/wireapp/openmls?branch=feat/rfc9420#46cc600432efb910d8ad3d481f609a3afcb81416"
+source = "git+https://github.com/wireapp/openmls?branch=feat/rfc9420#929e0c50bd6d90aca75ce2ae33e39b4683aa3d35"
 dependencies = [
  "async-trait",
  "backtrace",
@@ -1039,7 +1039,7 @@ dependencies = [
 [[package]]
 name = "openmls_basic_credential"
 version = "0.2.0"
-source = "git+https://github.com/wireapp/openmls?branch=feat/rfc9420#46cc600432efb910d8ad3d481f609a3afcb81416"
+source = "git+https://github.com/wireapp/openmls?branch=feat/rfc9420#929e0c50bd6d90aca75ce2ae33e39b4683aa3d35"
 dependencies = [
  "async-trait",
  "ed25519-dalek",
@@ -1056,7 +1056,7 @@ dependencies = [
 [[package]]
 name = "openmls_memory_keystore"
 version = "0.2.0"
-source = "git+https://github.com/wireapp/openmls?branch=feat/rfc9420#46cc600432efb910d8ad3d481f609a3afcb81416"
+source = "git+https://github.com/wireapp/openmls?branch=feat/rfc9420#929e0c50bd6d90aca75ce2ae33e39b4683aa3d35"
 dependencies = [
  "async-lock",
  "async-trait",
@@ -1068,7 +1068,7 @@ dependencies = [
 [[package]]
 name = "openmls_rust_crypto"
 version = "0.2.0"
-source = "git+https://github.com/wireapp/openmls?branch=feat/rfc9420#46cc600432efb910d8ad3d481f609a3afcb81416"
+source = "git+https://github.com/wireapp/openmls?branch=feat/rfc9420#929e0c50bd6d90aca75ce2ae33e39b4683aa3d35"
 dependencies = [
  "aes-gcm 0.9.2",
  "chacha20poly1305 0.9.1",
@@ -1092,7 +1092,7 @@ dependencies = [
 [[package]]
 name = "openmls_traits"
 version = "0.2.0"
-source = "git+https://github.com/wireapp/openmls?branch=feat/rfc9420#46cc600432efb910d8ad3d481f609a3afcb81416"
+source = "git+https://github.com/wireapp/openmls?branch=feat/rfc9420#929e0c50bd6d90aca75ce2ae33e39b4683aa3d35"
 dependencies = [
  "async-trait",
  "ed25519-dalek",
@@ -1108,7 +1108,7 @@ dependencies = [
 [[package]]
 name = "openmls_x509_credential"
 version = "0.2.0"
-source = "git+https://github.com/wireapp/openmls?branch=feat/rfc9420#46cc600432efb910d8ad3d481f609a3afcb81416"
+source = "git+https://github.com/wireapp/openmls?branch=feat/rfc9420#929e0c50bd6d90aca75ce2ae33e39b4683aa3d35"
 dependencies = [
  "async-trait",
  "base64 0.21.2",
