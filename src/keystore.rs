@@ -1,48 +1,77 @@
 use openmls_traits::key_store::{MlsEntity, OpenMlsKeyStore};
 
+use std::collections::HashMap;
 use std::fmt::Display;
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::io::{Read, Write};
+use std::ops::Deref;
+use std::sync::Mutex;
 
-pub struct TestKeyStore {
-    path: PathBuf,
+use serde_json::Value;
+
+#[derive(PartialEq, Eq, Debug, Hash)]
+struct Key(Vec<u8>);
+
+impl core::borrow::Borrow<[u8]> for Key {
+    fn borrow(&self) -> &[u8] {
+        self.0.borrow()
+    }
 }
+
+impl serde::Serialize for Key {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&base64::encode(&self.0))
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Key {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        d: D,
+    ) -> Result<Self, D::Error> {
+        let value = base64::decode(String::deserialize(d)?)
+            .map_err(|_| serde::de::Error::custom("Invalid base64 key"))?;
+        Ok(Key(value))
+    }
+}
+
+pub struct TestKeyStore(Mutex<HashMap<Key, Value>>);
 
 impl std::error::Error for TestKeyStoreError {}
 
 impl TestKeyStore {
-    pub fn create<P: AsRef<Path>>(path: P) -> Result<Self, std::io::Error> {
-        std::fs::create_dir_all(&path)?;
-        Ok(TestKeyStore {
-            path: path.as_ref().to_path_buf(),
-        })
+    pub fn new() -> Self {
+        TestKeyStore(Mutex::new(HashMap::new()))
     }
 
-    fn key_path(&self, k: &[u8]) -> PathBuf {
-        let mut path = self.path.clone();
-        path.push(base64::encode_config(k, base64::URL_SAFE));
-        path
+    pub fn read<R: Read>(r: &mut R) -> Self {
+        Self(Mutex::new(serde_json::from_reader(r).unwrap()))
     }
 
-    pub fn store_bytes(
+    pub fn write<W: Write>(&self, w: &mut W) -> () {
+        serde_json::to_writer(w, self.0.lock().unwrap().deref()).unwrap();
+    }
+
+    pub fn store_value<T: serde::Serialize>(
         &self,
         k: &[u8],
-    ) -> Result<std::fs::File, TestKeyStoreError> {
-        let file = std::fs::File::create(self.key_path(k))?;
-        Ok(file)
-    }
-
-    pub fn read_bytes(
-        &self,
-        k: &[u8],
-    ) -> Result<std::fs::File, TestKeyStoreError> {
-        let file = std::fs::File::open(self.key_path(k))?;
-        Ok(file)
-    }
-
-    pub fn delete_entry(&self, k: &[u8]) -> Result<(), TestKeyStoreError> {
-        std::fs::remove_file(self.key_path(k)).ok();
+        x: &T,
+    ) -> Result<(), serde_json::Error> {
+        let value = serde_json::to_value(x)?;
+        self.0.lock().unwrap().insert(Key(k.to_vec()), value);
         Ok(())
+    }
+
+    pub fn read_value<T: serde::de::DeserializeOwned>(
+        &self,
+        k: &[u8],
+    ) -> Result<Option<T>, serde_json::Error> {
+        match self.0.lock().unwrap().get(k) {
+            Some(value) => serde_json::from_value(value.clone()),
+            None => Ok(None),
+        }
+    }
+
+    fn delete_entry(&self, k: &[u8]) {
+        self.0.lock().unwrap().remove(k);
     }
 }
 
@@ -76,54 +105,63 @@ impl OpenMlsKeyStore for TestKeyStore {
         k: &[u8],
         v: &V,
     ) -> Result<(), Self::Error> {
-        let mut out = self.store_bytes(k)?;
-        // TODO: serialise directly
-        let value = serde_json::to_vec(v).map_err(|e| e.to_string())?;
-        out.write_all(&value)?;
+        self.store_value(k, v).map_err(|e| e.to_string())?;
         Ok(())
     }
 
     async fn read<V: MlsEntity>(&self, k: &[u8]) -> Option<V> {
-        let mut reader = self.read_bytes(k).ok()?;
-        serde_json::from_reader(&mut reader).ok()
+        self.read_value(k).unwrap()
     }
 
     async fn delete<V: MlsEntity>(&self, k: &[u8]) -> Result<(), Self::Error> {
-        self.delete_entry(k)
+        self.delete_entry(k);
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Read;
-    use tempdir::TempDir;
 
     #[test]
     fn test_store_and_read() {
-        let p = TempDir::new("store").unwrap();
-        let ks = TestKeyStore::create(&p).unwrap();
+        let ks = TestKeyStore::new();
 
-        let value = b"hello";
-        ks.store_bytes(b"foo").unwrap().write_all(value).unwrap();
-        let mut buf: Vec<u8> = Vec::new();
-        ks.read_bytes(b"foo")
-            .unwrap()
-            .read_to_end(&mut buf)
-            .unwrap();
-        assert_eq!(value, &buf[..]);
+        let value = "hello".to_string();
+        ks.store_value(b"foo", &value).unwrap();
+        let value2 = ks.read_value(b"foo").unwrap();
+        assert_eq!(Some(value), value2);
     }
 
     #[test]
     fn test_delete() {
-        let p = TempDir::new("store").unwrap();
-        let ks = TestKeyStore::create(&p).unwrap();
+        let ks = TestKeyStore::new();
 
-        ks.store_bytes(b"foo").unwrap().write_all(b"hello").unwrap();
-        ks.delete_entry(b"foo").unwrap();
-        match ks.read_bytes(b"foo") {
-            Err(_) => (),
-            Ok(_) => panic!("Unexpected success"),
+        ks.store_value(b"foo", &"hello".to_string()).unwrap();
+        ks.delete_entry(b"foo");
+        match ks.read_value::<String>(b"foo").unwrap() {
+            None => (),
+            Some(_) => panic!("Unexpected success"),
+        }
+    }
+
+    #[test]
+    fn test_reload() {
+        let ks = TestKeyStore::new();
+        ks.store_value(b"foo", &"hello".to_string()).unwrap();
+        ks.store_value(b"bar", &vec!["hello".to_string(), "world".to_string()])
+            .unwrap();
+
+        let mut json: Vec<u8> = Vec::new();
+        ks.write(&mut json);
+
+        eprintln!("{}", std::str::from_utf8(&json).unwrap());
+
+        let ks2 = TestKeyStore::read(&mut &json[..]);
+        {
+            let ks = ks.0.lock().unwrap();
+            let ks2 = ks2.0.lock().unwrap();
+            assert_eq!(ks.deref(), ks2.deref());
         }
     }
 }

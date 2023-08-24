@@ -1,6 +1,6 @@
 [package]
 name = "mls-test-cli"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 
 [dependencies]
@@ -11,10 +11,13 @@ openmls_basic_credential = { version = "0.1"}
 tls_codec = { version = "0.3.0-pre.1", features = ["derive", "serde", "mls"] }
 futures-lite = "1.12"
 async-trait = "0.1"
+sha256 = "<1.2"
+hex = "0.4"
 
 base64 = "0.13.0"
 uuid = "1.0.0-alpha"
 clap = { version = "3", features = ["derive"] }
+serde = "1.0.96"
 serde_json = "1.0.96"
 
 [patch.crates-io.openmls]
@@ -42,10 +45,9 @@ branch = "feat/d20"
 # [patch.crates-io.hpke-rs-rust-crypto]
 # git = "https://github.com/franziskuskiefer/hpke-rs.git"
 
-# [patch.crates-io.tls_codec]
-# git = "https://github.com/wireapp/formats"
-# package = "tls_codec"
-# branch = "fix-variable-length"
+[patch.crates-io.tls_codec]
+git = "https://github.com/wireapp/formats"
+branch = "pcapriotti/fix-quic-vec-rw"
 
 [dev-dependencies]
 tempdir = "0.3"

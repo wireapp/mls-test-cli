@@ -15,6 +15,7 @@ use io::Read;
 use io::Write;
 use std::fs;
 use std::io;
+use std::path::PathBuf;
 
 #[derive(Debug)]
 struct ClientId(Vec<u8>);
@@ -40,10 +41,14 @@ impl CredentialBundle {
         }
     }
 
-    fn new(backend: &impl OpenMlsCryptoProvider, client_id: ClientId) -> Self {
+    fn new(
+        backend: &impl OpenMlsCryptoProvider,
+        client_id: ClientId,
+        ciphersuite: Ciphersuite,
+    ) -> Self {
         let credential = Credential::new_basic(client_id.0);
         let keys = SignatureKeyPair::new(
-            SignatureScheme::ED25519,
+            ciphersuite.signature_algorithm(),
             &mut *backend.rand().borrow_rand().unwrap(),
         )
         .unwrap();
@@ -51,19 +56,19 @@ impl CredentialBundle {
     }
 
     fn store(&self, backend: &TestBackend) {
-        let ks = backend.key_store();
-        let mut out = ks.store_bytes(b"self").unwrap();
-        self.keys.tls_serialize(&mut out).unwrap();
-        self.credential.tls_serialize(&mut out).unwrap();
+        backend
+            .key_store()
+            .store_value(b"self", &(&self.keys, &self.credential))
+            .unwrap();
     }
 
     fn read(backend: &TestBackend) -> Self {
         let ks = backend.key_store();
-        let mut input = ks
-            .read_bytes(b"self")
+        let (keys, credential) = ks
+            .read_value(b"self")
+            .ok()
+            .flatten()
             .expect("Credential not initialised. Please run `init` first.");
-        let keys = SignatureKeyPair::tls_deserialize(&mut input).unwrap();
-        let credential = Credential::tls_deserialize(&mut input).unwrap();
         Self { credential, keys }
     }
 }
@@ -81,6 +86,8 @@ struct Cli {
 enum Command {
     Init {
         client_id: ClientId,
+        #[clap(short, long, default_value = "0x0001")]
+        ciphersuite: String,
     },
     Show {
         #[clap(subcommand)]
@@ -121,6 +128,8 @@ enum Command {
         epoch: u64,
         #[clap(subcommand)]
         command: ExternalProposalCommand,
+        #[clap(short, long, default_value = "0x0001")]
+        ciphersuite: String,
     },
     /// Create a commit that references all pending proposals
     Commit {
@@ -143,6 +152,8 @@ enum Command {
         group_info_out: Option<String>,
         #[clap(long)]
         group_out: Option<String>,
+        #[clap(short, long, default_value = "0x0001")]
+        ciphersuite: String,
     },
     /// Receive and store an incoming message.
     Consume {
@@ -174,6 +185,8 @@ enum KeyPackageCommand {
         /// How long in seconds will the key package be valid
         #[clap(short, long)]
         lifetime: Option<u64>,
+        #[clap(short, long, default_value = "0x0001")]
+        ciphersuite: String,
     },
     /// Compute the hash of a key package.
     Ref { key_package: String },
@@ -185,6 +198,10 @@ enum GroupCommand {
         group_id: String,
         #[clap(short, long)]
         removal_key: Option<String>,
+        #[clap(short, long, default_value = "-")]
+        group_out: String,
+        #[clap(short, long, default_value = "0x0001")]
+        ciphersuite: String,
     },
     FromWelcome {
         welcome: String,
@@ -229,6 +246,8 @@ enum ProposalCommand {
     Add { key_package: String },
     /// Create a remove proposal
     Remove { index: u32 },
+    /// Create a re-init proposal
+    ReInit { ciphersuite: Option<String> },
 }
 
 #[derive(Subcommand, Debug)]
@@ -242,6 +261,14 @@ fn path_reader(path: &str) -> io::Result<Box<dyn Read>> {
         Ok(Box::new(io::stdin()))
     } else {
         Ok(Box::new(fs::File::open(path)?))
+    }
+}
+
+fn path_writer(path: &str) -> io::Result<Box<dyn Write>> {
+    if path == "-" {
+        Ok(Box::new(io::stdout()))
+    } else {
+        Ok(Box::new(fs::File::create(path)?))
     }
 }
 
@@ -264,6 +291,7 @@ fn group_id_from_str(group_id: &str) -> GroupId {
 
 fn build_configuration(
     external_senders: Vec<ExternalSender>,
+    ciphersuite: Ciphersuite,
 ) -> MlsGroupConfig {
     MlsGroupConfig::builder()
         .wire_format_policy(openmls::group::MIXED_PLAINTEXT_WIRE_FORMAT_POLICY)
@@ -273,15 +301,22 @@ fn build_configuration(
         .sender_ratchet_configuration(SenderRatchetConfiguration::new(2, 5))
         .use_ratchet_tree_extension(true)
         .external_senders(external_senders)
+        .crypto_config(CryptoConfig::with_default_version(ciphersuite))
         .build()
+}
+
+fn parse_ciphersuite(s: &str) -> Result<Ciphersuite, String> {
+    let s = s.trim_start_matches("0x");
+    let n = u16::from_str_radix(s, 16).map_err(|e| e.to_string())?;
+    Ciphersuite::try_from(n).map_err(|e| e.to_string())
 }
 
 async fn new_key_package(
     backend: &TestBackend,
     _lifetime: Option<u64>,
+    ciphersuite: Ciphersuite,
 ) -> KeyPackage {
     let cred_bundle = CredentialBundle::read(backend);
-    let ciphersuite = Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
     // TODO: set lifetime
     KeyPackage::builder()
         .build(
@@ -299,23 +334,34 @@ async fn new_key_package(
 
 async fn run() {
     let cli = Cli::parse();
-    let backend = TestBackend::new(&cli.store).unwrap();
+    let backend = TestBackend::new(PathBuf::from(&cli.store)).unwrap();
     match cli.command {
-        Command::Init { client_id } => {
+        Command::Init {
+            client_id,
+            ciphersuite,
+        } => {
+            let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
             let ks = backend.key_store();
             match ks.read::<SignatureKeyPair>(b"self").await {
                 Some(_) => {
                     panic!("Credential already initialised");
                 }
                 None => {
-                    CredentialBundle::new(&backend, client_id).store(&backend);
+                    CredentialBundle::new(&backend, client_id, ciphersuite)
+                        .store(&backend);
                 }
             }
         }
         Command::KeyPackage {
-            command: KeyPackageCommand::Create { lifetime },
+            command:
+                KeyPackageCommand::Create {
+                    lifetime,
+                    ciphersuite,
+                },
         } => {
-            let key_package = new_key_package(&backend, lifetime).await;
+            let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
+            let key_package =
+                new_key_package(&backend, lifetime, ciphersuite).await;
 
             // output key package to standard output
             key_package.tls_serialize(&mut io::stdout()).unwrap();
@@ -363,9 +409,9 @@ async fn run() {
                     KeyPackageIn::tls_deserialize(&mut data).unwrap();
                 key_package
                     .validate(backend.crypto(), ProtocolVersion::Mls10)
-                    .unwrap();
+                    .unwrap()
             };
-            println!("{:#?}", kp);
+            serde_json::to_writer_pretty(io::stdout(), &kp).unwrap();
         }
         Command::KeyPackage {
             command: KeyPackageCommand::Ref { key_package },
@@ -391,6 +437,8 @@ async fn run() {
                 GroupCommand::Create {
                     group_id,
                     removal_key,
+                    group_out,
+                    ciphersuite,
                 },
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
@@ -410,7 +458,9 @@ async fn run() {
                 }
                 None => vec![],
             };
-            let group_config = build_configuration(external_senders);
+            let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
+            let group_config =
+                build_configuration(external_senders, ciphersuite);
 
             let group = MlsGroup::new_with_group_id(
                 &backend,
@@ -422,22 +472,26 @@ async fn run() {
             .await
             .unwrap();
 
-            save_group(&group, &mut io::stdout());
+            save_group(&group, &mut path_writer(&group_out).unwrap());
         }
         Command::Group {
             command: GroupCommand::FromWelcome { welcome, group_out },
         } => {
-            let group_config = build_configuration(vec![]);
             let message = MlsMessageIn::tls_deserialize(
                 &mut path_reader(&welcome).unwrap(),
             )
             .unwrap();
+
             let welcome = match message.extract() {
                 MlsMessageInBody::Welcome(welcome) => welcome,
                 _ => {
                     panic!("expected welcome")
                 }
             };
+
+            let ciphersuite = welcome.ciphersuite();
+            let group_config = build_configuration(vec![], ciphersuite);
+
             let group = MlsGroup::new_from_welcome(
                 &backend,
                 &group_config,
@@ -626,13 +680,48 @@ async fn run() {
                 save_group(&group, &mut writer);
             }
         }
+        Command::Proposal {
+            group_in,
+            group_out,
+            in_place,
+            command: ProposalCommand::ReInit { ciphersuite },
+        } => {
+            let cred_bundle = CredentialBundle::read(&backend);
+            let mut group = {
+                let data = path_reader(&group_in).unwrap();
+                load_group(data)
+            };
+            let ciphersuite = match ciphersuite {
+                Some(ciphersuite) => parse_ciphersuite(&ciphersuite).unwrap(),
+                None => group.ciphersuite(),
+            };
+            let (message, _) = group
+                .propose_reinit(
+                    &backend,
+                    &cred_bundle.keys,
+                    Extensions::empty(),
+                    ciphersuite,
+                    ProtocolVersion::Mls10,
+                )
+                .unwrap();
+            message.tls_serialize(&mut io::stdout()).unwrap();
+
+            let group_out = if in_place { Some(group_in) } else { group_out };
+            if let Some(group_out) = group_out {
+                let mut writer = fs::File::create(group_out).unwrap();
+                save_group(&group, &mut writer);
+            }
+        }
         Command::ExternalProposal {
             group_id,
             epoch,
             command: ExternalProposalCommand::Add {},
+            ciphersuite,
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
-            let key_package = new_key_package(&backend, None).await;
+            let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
+            let key_package =
+                new_key_package(&backend, None, ciphersuite).await;
             let group_id = group_id_from_str(&group_id);
             let proposal = JoinProposal::new(
                 key_package,
@@ -687,6 +776,7 @@ async fn run() {
             group_info_in,
             group_info_out,
             group_out,
+            ciphersuite,
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
             let group_info = {
@@ -694,13 +784,14 @@ async fn run() {
                 VerifiableGroupInfo::tls_deserialize(&mut data).unwrap()
             };
 
+            let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
             let (mut group, message, group_info) =
                 MlsGroup::join_by_external_commit(
                     &backend,
                     &cred_bundle.keys,
                     None,
                     group_info,
-                    &build_configuration(vec![]),
+                    &build_configuration(vec![], ciphersuite),
                     &[],
                     cred_bundle.credential_with_key(),
                 )
