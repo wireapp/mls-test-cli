@@ -20,7 +20,8 @@ use uuid::Uuid;
 
 #[derive(Debug)]
 struct ClientId {
-    user: String, client: String,
+    user: String,
+    client: String,
     domain: String,
 }
 
@@ -51,10 +52,8 @@ impl ClientId {
 
     fn to_x509(&self, handle: &str) -> String {
         let uuid = Uuid::parse_str(&self.user).unwrap();
-        let uid = base64::encode_config(
-            uuid.into_bytes(),
-            base64::URL_SAFE_NO_PAD,
-        );
+        let uid =
+            base64::encode_config(uuid.into_bytes(), base64::URL_SAFE_NO_PAD);
         format!(
             "subjectAltName=URI:im:wireapp={}/{}@{}, URI:im:wireapp=%40{}@{}",
             uid, self.client, self.domain, handle, self.domain
@@ -101,28 +100,34 @@ impl CredentialBundle {
         ciphersuite: Ciphersuite,
         handle: Option<String>,
     ) -> Self {
+        let keys = SignatureKeyPair::new(
+            ciphersuite.signature_algorithm(),
+            &mut *backend.rand().borrow_rand().unwrap(),
+        )
+        .unwrap();
         let credential = match credential_type {
             CredentialType::Basic => Credential::new_basic(client_id.to_vec()),
             CredentialType::X509 => {
                 // generate a self-signed certificate
                 let handle = handle.unwrap_or(client_id.user.clone());
-                let subject =
-                    format!("/O={}/CN={}", client_id.domain, handle);
+                let subject = format!("/O={}/CN={}", client_id.domain, handle);
                 let san = client_id.to_x509(&handle);
-                let cert = std::process::Command::new("openssl")
+                let openssl = std::process::Command::new("openssl")
                     .args([
                         "req",
+                        "-new",
                         "-x509",
-                        "-newkey",
-                        "rsa:4096",
-                        "-sha256",
+                        "-nodes",
                         "-days",
                         "3650",
-                        "-nodes",
-                        "-keyout",
-                        "/dev/null",
+                        "-key",
+                        "/dev/stdin",
+                        "-keyform",
+                        "DER",
                         "-out",
                         "/dev/stdout",
+                        "-keyout",
+                        "/dev/null",
                         "-outform",
                         "DER",
                         "-subj",
@@ -130,22 +135,27 @@ impl CredentialBundle {
                         "-addext",
                         &san,
                     ])
-                    .stdin(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .output()
-                    .unwrap()
-                    .stdout;
-                Credential::new_x509(
-                    vec![cert.clone(), cert],
-                )
-                .unwrap()
+                    .stdin(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::piped())
+                    .spawn()
+                    .unwrap();
+                let mut stdin = openssl.stdin.as_ref().unwrap();
+                // add hardcoded pkcs8 envelope
+                stdin.write_all(b"\x30\x2e\x02\x01\x00\x30\x05\x06\x03\x2b\x65\x70\x04\x22\x04\x20")
+                    .unwrap();
+                stdin.write_all(keys.private()).unwrap();
+                let out = openssl.wait_with_output().unwrap();
+                if !out.status.success() {
+                    panic!(
+                        "openssl failed: {}",
+                        core::str::from_utf8(&out.stderr).unwrap()
+                    );
+                }
+                let cert = out.stdout;
+                Credential::new_x509(vec![cert.clone(), cert]).unwrap()
             }
         };
-        let keys = SignatureKeyPair::new(
-            ciphersuite.signature_algorithm(),
-            &mut *backend.rand().borrow_rand().unwrap(),
-        )
-        .unwrap();
         Self { credential, keys }
     }
 
