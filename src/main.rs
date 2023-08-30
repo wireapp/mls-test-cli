@@ -16,14 +16,66 @@ use io::Write;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use uuid::Uuid;
 
 #[derive(Debug)]
-struct ClientId(Vec<u8>);
+struct ClientId {
+    user: String,
+    client: String,
+    domain: String,
+}
 
 impl core::str::FromStr for ClientId {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, String> {
-        Ok(ClientId(s.as_bytes().to_vec()))
+        let dom_index = s.find('@').ok_or("No domain separator")?;
+        let cli_index =
+            s[0..dom_index].find(':').ok_or("No client ID separator")?;
+        Ok(ClientId {
+            user: s[0..cli_index].to_string(),
+            client: s[cli_index + 1..dom_index].to_string(),
+            domain: s[dom_index + 1..].to_string(),
+        })
+    }
+}
+
+impl ClientId {
+    fn to_vec(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend(self.user.bytes());
+        out.push(b':');
+        out.extend(self.client.bytes());
+        out.push(b'@');
+        out.extend(self.domain.bytes());
+        out
+    }
+
+    fn to_x509(&self, handle: &str) -> String {
+        let uuid = Uuid::parse_str(&self.user).unwrap();
+        let uid =
+            base64::encode_config(uuid.into_bytes(), base64::URL_SAFE_NO_PAD);
+        format!(
+            "subjectAltName=URI:im:wireapp={}/{}@{}, URI:im:wireapp=%40{}@{}",
+            uid, self.client, self.domain, handle, self.domain
+        )
+    }
+}
+
+#[derive(Debug)]
+enum CredentialType {
+    Basic,
+    X509,
+}
+
+impl core::str::FromStr for CredentialType {
+    type Err = String;
+
+    fn from_str(x: &str) -> Result<Self, String> {
+        match x {
+            "basic" => Ok(Self::Basic),
+            "x509" => Ok(Self::X509),
+            _ => Err(format!("Invalid credential type {}", x)),
+        }
     }
 }
 
@@ -43,15 +95,67 @@ impl CredentialBundle {
 
     fn new(
         backend: &impl OpenMlsCryptoProvider,
+        credential_type: CredentialType,
         client_id: ClientId,
         ciphersuite: Ciphersuite,
+        handle: Option<String>,
     ) -> Self {
-        let credential = Credential::new_basic(client_id.0);
         let keys = SignatureKeyPair::new(
             ciphersuite.signature_algorithm(),
             &mut *backend.rand().borrow_rand().unwrap(),
         )
         .unwrap();
+        let credential = match credential_type {
+            CredentialType::Basic => Credential::new_basic(client_id.to_vec()),
+            CredentialType::X509 => {
+                // generate a self-signed certificate
+                let handle = handle.unwrap_or(client_id.user.clone());
+                let subject = format!("/O={}/CN={}", client_id.domain, handle);
+                let san = client_id.to_x509(&handle);
+                let openssl = std::process::Command::new("openssl")
+                    .args([
+                        "req",
+                        "-new",
+                        "-x509",
+                        "-nodes",
+                        "-days",
+                        "3650",
+                        "-key",
+                        "/dev/stdin",
+                        "-keyform",
+                        "DER",
+                        "-out",
+                        "/dev/stdout",
+                        "-keyout",
+                        "/dev/null",
+                        "-outform",
+                        "DER",
+                        "-subj",
+                        &subject,
+                        "-addext",
+                        &san,
+                    ])
+                    .stdin(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::piped())
+                    .spawn()
+                    .unwrap();
+                let mut stdin = openssl.stdin.as_ref().unwrap();
+                // add hardcoded pkcs8 envelope
+                stdin.write_all(b"\x30\x2e\x02\x01\x00\x30\x05\x06\x03\x2b\x65\x70\x04\x22\x04\x20")
+                    .unwrap();
+                stdin.write_all(keys.private()).unwrap();
+                let out = openssl.wait_with_output().unwrap();
+                if !out.status.success() {
+                    panic!(
+                        "openssl failed: {}",
+                        core::str::from_utf8(&out.stderr).unwrap()
+                    );
+                }
+                let cert = out.stdout;
+                Credential::new_x509(vec![cert.clone(), cert]).unwrap()
+            }
+        };
         Self { credential, keys }
     }
 
@@ -86,8 +190,12 @@ struct Cli {
 enum Command {
     Init {
         client_id: ClientId,
+        #[clap(short = 't', long, default_value = "basic")]
+        credential_type: CredentialType,
         #[clap(short, long, default_value = "0x0001")]
         ciphersuite: String,
+        #[clap(long)]
+        handle: Option<String>,
     },
     Show {
         #[clap(subcommand)]
@@ -338,17 +446,25 @@ async fn run() {
     match cli.command {
         Command::Init {
             client_id,
+            credential_type,
             ciphersuite,
+            handle,
         } => {
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
             let ks = backend.key_store();
-            match ks.read::<SignatureKeyPair>(b"self").await {
+            match ks.read_value::<serde_json::Value>(b"self").unwrap() {
                 Some(_) => {
                     panic!("Credential already initialised");
                 }
                 None => {
-                    CredentialBundle::new(&backend, client_id, ciphersuite)
-                        .store(&backend);
+                    CredentialBundle::new(
+                        &backend,
+                        credential_type,
+                        client_id,
+                        ciphersuite,
+                        handle,
+                    )
+                    .store(&backend);
                 }
             }
         }
