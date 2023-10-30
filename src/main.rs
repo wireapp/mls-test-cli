@@ -216,8 +216,12 @@ enum Command {
     },
     Message {
         #[clap(short, long)]
-        group: String,
+        group_in: String,
         text: String,
+        #[clap(long)]
+        group_out: Option<String>,
+        #[clap(short, long, conflicts_with = "group-out")]
+        in_place: bool,
     },
     Proposal {
         #[clap(short, long)]
@@ -735,16 +739,27 @@ async fn run() {
 
             commit.tls_serialize(&mut io::stdout()).unwrap();
         }
-        Command::Message { group, text } => {
+        Command::Message {
+            group_in,
+            text,
+            in_place,
+            group_out,
+        } => {
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
-                let data = path_reader(&group).unwrap();
+                let data = path_reader(&group_in).unwrap();
                 load_group(data)
             };
             let message = group
                 .create_message(&backend, &cred_bundle.keys, text.as_bytes())
                 .unwrap();
             message.tls_serialize(&mut io::stdout()).unwrap();
+
+            let group_out = if in_place { Some(group_in) } else { group_out };
+            if let Some(group_out) = group_out {
+                let mut writer = fs::File::create(group_out).unwrap();
+                save_group(&group, &mut writer);
+            }
         }
         Command::Proposal {
             group_in,
