@@ -528,7 +528,10 @@ async fn run() {
                 let key_package =
                     KeyPackageIn::tls_deserialize(&mut data).unwrap();
                 key_package
-                    .validate(backend.crypto(), ProtocolVersion::Mls10)
+                    .standalone_validate(
+                        backend.crypto(),
+                        ProtocolVersion::Mls10,
+                    )
                     .unwrap()
             };
             serde_json::to_writer_pretty(io::stdout(), &kp).unwrap();
@@ -539,7 +542,7 @@ async fn run() {
             let mut data = path_reader(&key_package).unwrap();
             let key_package = KeyPackageIn::tls_deserialize(&mut data).unwrap();
             let key_package = key_package
-                .validate(backend.crypto(), ProtocolVersion::Mls10)
+                .standalone_validate(backend.crypto(), ProtocolVersion::Mls10)
                 .unwrap();
             io::stdout()
                 .write_all(
@@ -646,9 +649,7 @@ async fn run() {
                         "Could not open key package file: {}",
                         kp
                     ));
-                    let kp = KeyPackageIn::tls_deserialize(&mut data).unwrap();
-                    kp.validate(backend.crypto(), ProtocolVersion::Mls10)
-                        .unwrap()
+                    KeyPackageIn::tls_deserialize(&mut data).unwrap()
                 })
                 .collect::<Vec<_>>();
 
@@ -659,7 +660,7 @@ async fn run() {
                     .unwrap()
             } else {
                 let (commit, welcome, group_info) = group
-                    .add_members(&backend, &cred_bundle.keys, &kps)
+                    .add_members(&backend, &cred_bundle.keys, kps)
                     .await
                     .unwrap();
                 (commit, Some(welcome), group_info)
@@ -773,12 +774,10 @@ async fn run() {
             };
             let key_package = {
                 let mut data = path_reader(&key_package).unwrap();
-                let kp = KeyPackageIn::tls_deserialize(&mut data).unwrap();
-                kp.validate(backend.crypto(), ProtocolVersion::Mls10)
-                    .unwrap()
+                KeyPackageIn::tls_deserialize(&mut data).unwrap()
             };
             let (message, _) = group
-                .propose_add_member(&backend, &cred_bundle.keys, &key_package)
+                .propose_add_member(&backend, &cred_bundle.keys, key_package)
                 .unwrap();
             message.tls_serialize(&mut io::stdout()).unwrap();
 
