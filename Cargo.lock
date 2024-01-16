@@ -947,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "mls-test-cli"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "async-trait",
  "base64 0.13.1",
