@@ -43,7 +43,7 @@ impl ClientId {
     fn to_vec(&self) -> Vec<u8> {
         let mut out = Vec::new();
         out.extend(self.user.bytes());
-        out.push(b'!');
+        out.push(b':');
         out.extend(self.client.bytes());
         out.push(b'@');
         out.extend(self.domain.bytes());
