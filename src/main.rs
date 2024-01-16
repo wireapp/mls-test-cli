@@ -30,7 +30,7 @@ impl core::str::FromStr for ClientId {
     fn from_str(s: &str) -> Result<Self, String> {
         let dom_index = s.find('@').ok_or("No domain separator")?;
         let cli_index =
-            s[0..dom_index].find(':').ok_or("No client ID separator")?;
+            s[0..dom_index].find('!').ok_or("No client ID separator")?;
         Ok(ClientId {
             user: s[0..cli_index].to_string(),
             client: s[cli_index + 1..dom_index].to_string(),
@@ -43,7 +43,7 @@ impl ClientId {
     fn to_vec(&self) -> Vec<u8> {
         let mut out = Vec::new();
         out.extend(self.user.bytes());
-        out.push(b':');
+        out.push(b'!');
         out.extend(self.client.bytes());
         out.push(b'@');
         out.extend(self.domain.bytes());
@@ -55,7 +55,7 @@ impl ClientId {
         let uid =
             base64::encode_config(uuid.into_bytes(), base64::URL_SAFE_NO_PAD);
         format!(
-            "subjectAltName=URI:im:wireapp={}/{}@{}, URI:im:wireapp=%40{}@{}",
+            "subjectAltName=URI:wireapp://{}%21{}@{}, URI:wireapp://%40{}@{}",
             uid, self.client, self.domain, handle, self.domain
         )
     }
