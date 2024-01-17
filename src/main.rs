@@ -16,7 +16,6 @@ use io::Write;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::str::FromStr;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -991,31 +990,3 @@ fn main() {
     future::block_on(run());
 }
 
-#[tokio::test]
-async fn toto() {
-
-    // cid: ClientIdentity {domain = "example.com", user = "09e4e25a-fc69-44cb-92f6-e1123e957fba", client = "cc6e640e296e8bba"}
-    // cid (string): 09e4e25a-fc69-44cb-92f6-e1123e957fba:cc6e640e296e8bba@example.com
-    let client_id = ClientId::from_str("09e4e25a-fc69-44cb-92f6-e1123e957fba:cc6e640e296e8bba@example.com").unwrap();
-    let backend = TestBackend::new(PathBuf::from("store.edb")).unwrap();
-    let ciphersuite = "0x0001";
-    let credential_type = CredentialType::X509;
-    let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
-    let ks = backend.key_store();
-    match ks.read_value::<serde_json::Value>(b"self").unwrap() {
-        Some(_) => {
-            panic!("Credential already initialised");
-        }
-        None => {
-            let cb = CredentialBundle::new(
-                &backend,
-                credential_type,
-                client_id,
-                ciphersuite,
-                None,
-            );
-            cb
-                .store(&backend);
-        }
-    }
-}
