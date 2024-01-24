@@ -813,9 +813,9 @@ dependencies = [
 
 [[package]]
 name = "hermit-abi"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d77f7ec81a6d05a3abb01ab6eb7590f6083d08449fe5a1c8b1e620283546ccb7"
+checksum = "5d3d0e0f38255e7fa3cf31335b3a56f05febd18025f4db5ef7a0cfb4f8da651f"
 
 [[package]]
 name = "hex"
@@ -986,7 +986,7 @@ dependencies = [
 
 [[package]]
 name = "mls-test-cli"
-version = "0.10.2"
+version = "0.10.3"
 dependencies = [
  "async-trait",
  "base64 0.13.1",
@@ -1001,7 +1001,7 @@ dependencies = [
  "serde_json",
  "sha256",
  "tempdir",
- "tls_codec 0.3.0",
+ "tls_codec",
  "tokio",
  "uuid",
 ]
@@ -1031,7 +1031,7 @@ version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
 dependencies = [
- "hermit-abi 0.3.3",
+ "hermit-abi 0.3.4",
  "libc",
 ]
 
@@ -1083,7 +1083,7 @@ dependencies = [
  "serde",
  "subtle",
  "thiserror",
- "tls_codec 0.4.0",
+ "tls_codec",
  "x509-cert",
 ]
 
@@ -1101,7 +1101,7 @@ dependencies = [
  "rand_core 0.6.4",
  "secrecy",
  "serde",
- "tls_codec 0.4.0",
+ "tls_codec",
 ]
 
 [[package]]
@@ -1136,7 +1136,7 @@ dependencies = [
  "sha2",
  "signature",
  "thiserror",
- "tls_codec 0.4.0",
+ "tls_codec",
  "zeroize",
 ]
 
@@ -1152,7 +1152,7 @@ dependencies = [
  "rand_core 0.6.4",
  "serde",
  "signature",
- "tls_codec 0.4.0",
+ "tls_codec",
  "zeroize",
 ]
 
@@ -1170,7 +1170,7 @@ dependencies = [
  "percent-encoding",
  "secrecy",
  "serde",
- "tls_codec 0.4.0",
+ "tls_codec",
  "uuid",
  "x509-cert",
 ]
@@ -1771,40 +1771,18 @@ dependencies = [
 
 [[package]]
 name = "tls_codec"
-version = "0.3.0"
-source = "git+https://github.com/wireapp/formats?branch=pcapriotti/fix-quic-vec-rw#5065a28f424fc8a28812009009fc108fdd7e6745"
-dependencies = [
- "serde",
- "tls_codec_derive 0.3.0",
- "zeroize",
-]
-
-[[package]]
-name = "tls_codec"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d38a1d5fcfa859f0ec2b5e111dc903890bd7dac7f34713232bf9aa4fd7cad7b2"
+source = "git+https://github.com/wireapp/formats?branch=pcapriotti/fix-quic-vec-rw#e1cfcf83672180c588b80a43e1f58e1b63db8f47"
 dependencies = [
  "serde",
- "tls_codec_derive 0.4.0",
+ "tls_codec_derive",
  "zeroize",
 ]
 
 [[package]]
 name = "tls_codec_derive"
-version = "0.3.0"
-source = "git+https://github.com/wireapp/formats?branch=pcapriotti/fix-quic-vec-rw#5065a28f424fc8a28812009009fc108fdd7e6745"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.48",
-]
-
-[[package]]
-name = "tls_codec_derive"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8e00e3e7a54e0f1c8834ce72ed49c8487fbd3f801d8cfe1a0ad0640382f8e15"
+source = "git+https://github.com/wireapp/formats?branch=pcapriotti/fix-quic-vec-rw#e1cfcf83672180c588b80a43e1f58e1b63db8f47"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2096,7 +2074,7 @@ dependencies = [
  "const-oid",
  "der",
  "spki",
- "tls_codec 0.4.0",
+ "tls_codec",
 ]
 
 [[package]]
