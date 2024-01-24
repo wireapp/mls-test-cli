@@ -104,7 +104,7 @@ impl CredentialBundle {
             ciphersuite.signature_algorithm(),
             &mut *backend.rand().borrow_rand().unwrap(),
         )
-            .unwrap();
+        .unwrap();
         let credential = match credential_type {
             CredentialType::Basic => Credential::new_basic(client_id.to_vec()),
             CredentialType::X509 => {
@@ -391,7 +391,7 @@ fn save_group<W: Write>(group: &MlsGroup, mut writer: W) {
 
 fn load_group<R: Read>(reader: R) -> MlsGroup {
     #[allow(deprecated)]
-        let group: SerializedMlsGroup = serde_json::from_reader(reader).unwrap();
+    let group: SerializedMlsGroup = serde_json::from_reader(reader).unwrap();
     group.into()
 }
 
@@ -468,16 +468,16 @@ async fn run() {
                         ciphersuite,
                         handle,
                     )
-                        .store(&backend);
+                    .store(&backend);
                 }
             }
         }
         Command::KeyPackage {
             command:
-            KeyPackageCommand::Create {
-                lifetime,
-                ciphersuite,
-            },
+                KeyPackageCommand::Create {
+                    lifetime,
+                    ciphersuite,
+                },
         } => {
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
             let key_package =
@@ -528,7 +528,10 @@ async fn run() {
                 let key_package =
                     KeyPackageIn::tls_deserialize(&mut data).unwrap();
                 key_package
-                    .standalone_validate(backend.crypto(), ProtocolVersion::Mls10)
+                    .standalone_validate(
+                        backend.crypto(),
+                        ProtocolVersion::Mls10,
+                    )
                     .unwrap()
             };
             serde_json::to_writer_pretty(io::stdout(), &kp).unwrap();
@@ -554,12 +557,12 @@ async fn run() {
         }
         Command::Group {
             command:
-            GroupCommand::Create {
-                group_id,
-                removal_key,
-                group_out,
-                ciphersuite,
-            },
+                GroupCommand::Create {
+                    group_id,
+                    removal_key,
+                    group_out,
+                    ciphersuite,
+                },
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
             let group_id = group_id_from_str(&group_id);
@@ -589,8 +592,8 @@ async fn run() {
                 group_id,
                 cred_bundle.credential_with_key(),
             )
-                .await
-                .unwrap();
+            .await
+            .unwrap();
 
             save_group(&group, &mut path_writer(&group_out).unwrap());
         }
@@ -600,7 +603,7 @@ async fn run() {
             let message = MlsMessageIn::tls_deserialize(
                 &mut path_reader(&welcome).unwrap(),
             )
-                .unwrap();
+            .unwrap();
 
             let welcome = match message.extract() {
                 MlsMessageInBody::Welcome(welcome) => welcome,
@@ -618,21 +621,21 @@ async fn run() {
                 welcome,
                 None,
             )
-                .await
-                .unwrap();
+            .await
+            .unwrap();
             let mut group_out = fs::File::create(group_out).unwrap();
             save_group(&group, &mut group_out);
         }
         Command::Member {
             command:
-            MemberCommand::Add {
-                group: group_in,
-                key_packages,
-                welcome_out,
-                group_out,
-                group_info_out,
-                in_place,
-            },
+                MemberCommand::Add {
+                    group: group_in,
+                    key_packages,
+                    welcome_out,
+                    group_out,
+                    group_info_out,
+                    in_place,
+                },
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
@@ -691,14 +694,14 @@ async fn run() {
         }
         Command::Member {
             command:
-            MemberCommand::Remove {
-                group: group_in,
-                indices,
-                welcome_out,
-                group_out,
-                group_info_out,
-                in_place,
-            },
+                MemberCommand::Remove {
+                    group: group_in,
+                    indices,
+                    welcome_out,
+                    group_out,
+                    group_info_out,
+                    in_place,
+                },
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
@@ -861,7 +864,7 @@ async fn run() {
                 GroupEpoch::from(epoch),
                 &cred_bundle.keys,
             )
-                .unwrap();
+            .unwrap();
             proposal.tls_serialize(&mut io::stdout()).unwrap();
         }
         Command::Commit {
@@ -927,8 +930,8 @@ async fn run() {
                     &[],
                     cred_bundle.credential_with_key(),
                 )
-                    .await
-                    .unwrap();
+                .await
+                .unwrap();
 
             message.tls_serialize(&mut io::stdout()).unwrap();
 
@@ -1004,4 +1007,3 @@ async fn run() {
 fn main() {
     future::block_on(run());
 }
-
