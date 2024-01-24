@@ -1001,7 +1001,7 @@ dependencies = [
  "serde_json",
  "sha256",
  "tempdir",
- "tls_codec 0.3.0",
+ "tls_codec",
  "tokio",
  "uuid",
 ]
@@ -1083,7 +1083,7 @@ dependencies = [
  "serde",
  "subtle",
  "thiserror",
- "tls_codec 0.4.0",
+ "tls_codec",
  "x509-cert",
 ]
 
@@ -1101,7 +1101,7 @@ dependencies = [
  "rand_core 0.6.4",
  "secrecy",
  "serde",
- "tls_codec 0.4.0",
+ "tls_codec",
 ]
 
 [[package]]
@@ -1136,7 +1136,7 @@ dependencies = [
  "sha2",
  "signature",
  "thiserror",
- "tls_codec 0.4.0",
+ "tls_codec",
  "zeroize",
 ]
 
@@ -1152,7 +1152,7 @@ dependencies = [
  "rand_core 0.6.4",
  "serde",
  "signature",
- "tls_codec 0.4.0",
+ "tls_codec",
  "zeroize",
 ]
 
@@ -1170,7 +1170,7 @@ dependencies = [
  "percent-encoding",
  "secrecy",
  "serde",
- "tls_codec 0.4.0",
+ "tls_codec",
  "uuid",
  "x509-cert",
 ]
@@ -1771,40 +1771,18 @@ dependencies = [
 
 [[package]]
 name = "tls_codec"
-version = "0.3.0"
-source = "git+https://github.com/wireapp/formats?branch=pcapriotti/fix-quic-vec-rw#5065a28f424fc8a28812009009fc108fdd7e6745"
-dependencies = [
- "serde",
- "tls_codec_derive 0.3.0",
- "zeroize",
-]
-
-[[package]]
-name = "tls_codec"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d38a1d5fcfa859f0ec2b5e111dc903890bd7dac7f34713232bf9aa4fd7cad7b2"
+source = "git+https://github.com/wireapp/formats?branch=pcapriotti/fix-quic-vec-rw#e1cfcf83672180c588b80a43e1f58e1b63db8f47"
 dependencies = [
  "serde",
- "tls_codec_derive 0.4.0",
+ "tls_codec_derive",
  "zeroize",
 ]
 
 [[package]]
 name = "tls_codec_derive"
-version = "0.3.0"
-source = "git+https://github.com/wireapp/formats?branch=pcapriotti/fix-quic-vec-rw#5065a28f424fc8a28812009009fc108fdd7e6745"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.48",
-]
-
-[[package]]
-name = "tls_codec_derive"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8e00e3e7a54e0f1c8834ce72ed49c8487fbd3f801d8cfe1a0ad0640382f8e15"
+source = "git+https://github.com/wireapp/formats?branch=pcapriotti/fix-quic-vec-rw#e1cfcf83672180c588b80a43e1f58e1b63db8f47"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2096,7 +2074,7 @@ dependencies = [
  "const-oid",
  "der",
  "spki",
- "tls_codec 0.4.0",
+ "tls_codec",
 ]
 
 [[package]]

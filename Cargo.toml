@@ -8,7 +8,7 @@ openmls = "1.0.0"
 openmls_traits = "0.2"
 openmls_rust_crypto = "0.2"
 openmls_basic_credential = "0.2"
-tls_codec = { version = "0.3.0-pre.1", features = ["derive", "serde", "mls"] }
+tls_codec = { version = "0.4.0", features = ["derive", "serde", "mls"] }
 futures-lite = "1.12"
 async-trait = "0.1"
 sha256 = "<1.2"
