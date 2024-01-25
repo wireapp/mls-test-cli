@@ -1772,7 +1772,7 @@ dependencies = [
 [[package]]
 name = "tls_codec"
 version = "0.4.0"
-source = "git+https://github.com/wireapp/formats?branch=pcapriotti/fix-quic-vec-rw#e1cfcf83672180c588b80a43e1f58e1b63db8f47"
+source = "git+https://github.com/RustCrypto/formats?rev=b002bd979afda399b7a652dee40506b66fd69b4b#b002bd979afda399b7a652dee40506b66fd69b4b"
 dependencies = [
  "serde",
  "tls_codec_derive",
@@ -1782,7 +1782,7 @@ dependencies = [
 [[package]]
 name = "tls_codec_derive"
 version = "0.4.0"
-source = "git+https://github.com/wireapp/formats?branch=pcapriotti/fix-quic-vec-rw#e1cfcf83672180c588b80a43e1f58e1b63db8f47"
+source = "git+https://github.com/RustCrypto/formats?rev=b002bd979afda399b7a652dee40506b66fd69b4b#b002bd979afda399b7a652dee40506b66fd69b4b"
 dependencies = [
  "proc-macro2",
  "quote",
