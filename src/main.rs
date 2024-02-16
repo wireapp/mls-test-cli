@@ -29,8 +29,7 @@ impl core::str::FromStr for ClientId {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, String> {
         let dom_index = s.find('@').ok_or("No domain separator")?;
-        let cli_index =
-            s[0..dom_index].find(':').ok_or("No client ID separator")?;
+        let cli_index = s[0..dom_index].find(':').ok_or("No client ID separator")?;
         Ok(ClientId {
             user: s[0..cli_index].to_string(),
             client: s[cli_index + 1..dom_index].to_string(),
@@ -52,8 +51,7 @@ impl ClientId {
 
     fn to_x509(&self, handle: &str) -> String {
         let uuid = Uuid::parse_str(&self.user).unwrap();
-        let uid =
-            base64::encode_config(uuid.into_bytes(), base64::URL_SAFE_NO_PAD);
+        let uid = base64::encode_config(uuid.into_bytes(), base64::URL_SAFE_NO_PAD);
         format!(
             "subjectAltName=URI:wireapp://{}%21{}@{}, URI:wireapp://%40{}@{}",
             uid, self.client, self.domain, handle, self.domain
@@ -142,7 +140,8 @@ impl CredentialBundle {
                     .unwrap();
                 let mut stdin = openssl.stdin.as_ref().unwrap();
                 // add hardcoded pkcs8 envelope
-                stdin.write_all(b"\x30\x2e\x02\x01\x00\x30\x05\x06\x03\x2b\x65\x70\x04\x22\x04\x20")
+                stdin
+                    .write_all(b"\x30\x2e\x02\x01\x00\x30\x05\x06\x03\x2b\x65\x70\x04\x22\x04\x20")
                     .unwrap();
                 stdin.write_all(keys.private()).unwrap();
                 let out = openssl.wait_with_output().unwrap();
@@ -186,6 +185,24 @@ struct Cli {
     command: Command,
 }
 
+#[derive(Debug)]
+enum ShowMode {
+    Json,
+    Rust,
+}
+
+impl core::str::FromStr for ShowMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, String> {
+        Ok(match s {
+            "json" => Self::Json,
+            "rust" => Self::Rust,
+            _ => Err(format!("invalid mode {}", s))?,
+        })
+    }
+}
+
 #[derive(Subcommand, Debug)]
 enum Command {
     Init {
@@ -198,6 +215,8 @@ enum Command {
         handle: Option<String>,
     },
     Show {
+        #[clap(long, default_value = "json")]
+        mode: ShowMode,
         #[clap(subcommand)]
         command: ShowCommand,
     },
@@ -288,6 +307,7 @@ enum Command {
 enum ShowCommand {
     Message { file: String },
     KeyPackage { file: String },
+    GroupInfo { file: String },
 }
 
 #[derive(Subcommand, Debug)]
@@ -396,8 +416,7 @@ fn load_group<R: Read>(reader: R) -> MlsGroup {
 }
 
 fn group_id_from_str(group_id: &str) -> GroupId {
-    let group_id =
-        base64::decode(group_id).expect("Failed to decode group_id as base64");
+    let group_id = base64::decode(group_id).expect("Failed to decode group_id as base64");
     GroupId::from_slice(&group_id)
 }
 
@@ -480,61 +499,84 @@ async fn run() {
                 },
         } => {
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
-            let key_package =
-                new_key_package(&backend, lifetime, ciphersuite).await;
+            let key_package = new_key_package(&backend, lifetime, ciphersuite).await;
 
             // output key package to standard output
             key_package.tls_serialize(&mut io::stdout()).unwrap();
         }
         Command::Show {
+            mode,
             command: ShowCommand::Message { file },
         } => {
             let message = {
                 let mut data = path_reader(&file).unwrap();
                 MlsMessageIn::tls_deserialize(&mut data).unwrap()
             };
-            match message.extract() {
-                MlsMessageInBody::PublicMessage(pmsg) => {
-                    let v = serde_json::to_value(&pmsg).unwrap();
-                    let obj = json!({ "type": "public_message",
+            match mode {
+                ShowMode::Rust => println!("{:#?}", message),
+                ShowMode::Json => match message.extract() {
+                    MlsMessageInBody::PublicMessage(pmsg) => {
+                        let v = serde_json::to_value(&pmsg).unwrap();
+                        let obj = json!({ "type": "public_message",
                                       "message": v });
-                    serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
-                }
-                MlsMessageInBody::PrivateMessage(_) => {
-                    let obj = json!({ "type": "private_message" });
-                    serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
-                }
-                MlsMessageInBody::Welcome(_) => {
-                    let obj = json!({ "type": "welcome" });
-                    serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
-                }
-                MlsMessageInBody::GroupInfo(_) => {
-                    let obj = json!({ "type": "group_info" });
-                    serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
-                }
-                MlsMessageInBody::KeyPackage(kp) => {
-                    let v = serde_json::to_value(&kp).unwrap();
-                    let obj = json!({ "type": "key_package",
+                        serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+                    }
+                    MlsMessageInBody::PrivateMessage(_) => {
+                        let obj = json!({ "type": "private_message" });
+                        serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+                    }
+                    MlsMessageInBody::Welcome(_) => {
+                        let obj = json!({ "type": "welcome" });
+                        serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+                    }
+                    MlsMessageInBody::GroupInfo(_) => {
+                        let obj = json!({ "type": "group_info" });
+                        serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+                    }
+                    MlsMessageInBody::KeyPackage(kp) => {
+                        let v = serde_json::to_value(&kp).unwrap();
+                        let obj = json!({ "type": "key_package",
                                       "message": v });
-                    serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
-                }
+                        serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+                    }
+                },
             }
         }
         Command::Show {
+            mode,
             command: ShowCommand::KeyPackage { file },
         } => {
             let kp = {
                 let mut data = path_reader(&file).unwrap();
-                let key_package =
-                    KeyPackageIn::tls_deserialize(&mut data).unwrap();
+                let key_package = KeyPackageIn::tls_deserialize(&mut data).unwrap();
                 key_package
-                    .standalone_validate(
-                        backend.crypto(),
-                        ProtocolVersion::Mls10,
-                    )
+                    .standalone_validate(backend.crypto(), ProtocolVersion::Mls10)
                     .unwrap()
             };
-            serde_json::to_writer_pretty(io::stdout(), &kp).unwrap();
+            match mode {
+                ShowMode::Json => {
+                    serde_json::to_writer_pretty(io::stdout(), &kp).unwrap();
+                }
+                ShowMode::Rust => {
+                    println!("{:#?}", kp);
+                }
+            }
+        }
+        Command::Show {
+            mode,
+            command: ShowCommand::GroupInfo { file },
+        } => {
+            match mode {
+                ShowMode::Json => {
+                    panic!("Json not supported for GroupInfo");
+                }
+                _ => (),
+            };
+            let group_info = {
+                let mut data = path_reader(&file).unwrap();
+                VerifiableGroupInfo::tls_deserialize(&mut data).unwrap()
+            };
+            eprintln!("{:#?}", group_info);
         }
         Command::KeyPackage {
             command: KeyPackageCommand::Ref { key_package },
@@ -545,9 +587,7 @@ async fn run() {
                 .standalone_validate(backend.crypto(), ProtocolVersion::Mls10)
                 .unwrap();
             io::stdout()
-                .write_all(
-                    key_package.hash_ref(backend.crypto()).unwrap().as_slice(),
-                )
+                .write_all(key_package.hash_ref(backend.crypto()).unwrap().as_slice())
                 .unwrap();
         }
         Command::PublicKey => {
@@ -575,15 +615,13 @@ async fn run() {
                         reader.read_to_end(&mut data).unwrap();
                         SignaturePublicKey::from(data)
                     };
-                    let backend_sender =
-                        ExternalSender::new(removal_key, backend_credential);
+                    let backend_sender = ExternalSender::new(removal_key, backend_credential);
                     vec![backend_sender]
                 }
                 None => vec![],
             };
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
-            let group_config =
-                build_configuration(external_senders, ciphersuite);
+            let group_config = build_configuration(external_senders, ciphersuite);
 
             let group = MlsGroup::new_with_group_id(
                 &backend,
@@ -600,10 +638,8 @@ async fn run() {
         Command::Group {
             command: GroupCommand::FromWelcome { welcome, group_out },
         } => {
-            let message = MlsMessageIn::tls_deserialize(
-                &mut path_reader(&welcome).unwrap(),
-            )
-            .unwrap();
+            let message =
+                MlsMessageIn::tls_deserialize(&mut path_reader(&welcome).unwrap()).unwrap();
 
             let welcome = match message.extract() {
                 MlsMessageInBody::Welcome(welcome) => welcome,
@@ -615,14 +651,9 @@ async fn run() {
             let ciphersuite = welcome.ciphersuite();
             let group_config = build_configuration(vec![], ciphersuite);
 
-            let group = MlsGroup::new_from_welcome(
-                &backend,
-                &group_config,
-                welcome,
-                None,
-            )
-            .await
-            .unwrap();
+            let group = MlsGroup::new_from_welcome(&backend, &group_config, welcome, None)
+                .await
+                .unwrap();
             let mut group_out = fs::File::create(group_out).unwrap();
             save_group(&group, &mut group_out);
         }
@@ -645,10 +676,8 @@ async fn run() {
             let kps = key_packages
                 .into_iter()
                 .map(|kp| {
-                    let mut data = path_reader(&kp).expect(&format!(
-                        "Could not open key package file: {}",
-                        kp
-                    ));
+                    let mut data = path_reader(&kp)
+                        .expect(&format!("Could not open key package file: {}", kp));
                     let kp = KeyPackageIn::tls_deserialize(&mut data).unwrap();
                     kp.standalone_validate(backend.crypto(), ProtocolVersion::Mls10)
                         .unwrap()
@@ -683,9 +712,7 @@ async fn run() {
                 save_group(&group, &mut writer);
             }
 
-            if let (Some(group_info_out), Some(group_info)) =
-                (group_info_out, group_info)
-            {
+            if let (Some(group_info_out), Some(group_info)) = (group_info_out, group_info) {
                 let mut writer = fs::File::create(group_info_out).unwrap();
                 group_info.tls_serialize(&mut writer).unwrap();
             }
@@ -733,9 +760,7 @@ async fn run() {
                 }
             }
 
-            if let (Some(group_info_out), Some(group_info)) =
-                (group_info_out, group_info)
-            {
+            if let (Some(group_info_out), Some(group_info)) = (group_info_out, group_info) {
                 let mut writer = fs::File::create(group_info_out).unwrap();
                 group_info.tls_serialize(&mut writer).unwrap();
             }
@@ -855,8 +880,7 @@ async fn run() {
         } => {
             let cred_bundle = CredentialBundle::read(&backend);
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
-            let key_package =
-                new_key_package(&backend, None, ciphersuite).await;
+            let key_package = new_key_package(&backend, None, ciphersuite).await;
             let group_id = group_id_from_str(&group_id);
             let proposal = JoinProposal::new(
                 key_package,
@@ -900,9 +924,7 @@ async fn run() {
                 save_group(&group, &mut writer);
             }
 
-            if let (Some(group_info_out), Some(group_info)) =
-                (group_info_out, group_info)
-            {
+            if let (Some(group_info_out), Some(group_info)) = (group_info_out, group_info) {
                 let mut writer = fs::File::create(group_info_out).unwrap();
                 group_info.tls_serialize(&mut writer).unwrap();
             }
@@ -920,18 +942,17 @@ async fn run() {
             };
 
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
-            let (mut group, message, group_info) =
-                MlsGroup::join_by_external_commit(
-                    &backend,
-                    &cred_bundle.keys,
-                    None,
-                    group_info,
-                    &build_configuration(vec![], ciphersuite),
-                    &[],
-                    cred_bundle.credential_with_key(),
-                )
-                .await
-                .unwrap();
+            let (mut group, message, group_info) = MlsGroup::join_by_external_commit(
+                &backend,
+                &cred_bundle.keys,
+                None,
+                group_info,
+                &build_configuration(vec![], ciphersuite),
+                &[],
+                cred_bundle.credential_with_key(),
+            )
+            .await
+            .unwrap();
 
             message.tls_serialize(&mut io::stdout()).unwrap();
 
@@ -941,9 +962,7 @@ async fn run() {
                 save_group(&group, &mut writer);
             }
 
-            if let (Some(group_info_out), Some(group_info)) =
-                (group_info_out, group_info)
-            {
+            if let (Some(group_info_out), Some(group_info)) = (group_info_out, group_info) {
                 let mut writer = fs::File::create(group_info_out).unwrap();
                 group_info.tls_serialize(&mut writer).unwrap();
             }
@@ -987,9 +1006,7 @@ async fn run() {
                         .await
                         .expect("Could not merge commit");
                 }
-                ProcessedMessageContent::ExternalJoinProposalMessage(
-                    staged_proposal,
-                ) => {
+                ProcessedMessageContent::ExternalJoinProposalMessage(staged_proposal) => {
                     group.store_pending_proposal(*staged_proposal);
                 }
             }
