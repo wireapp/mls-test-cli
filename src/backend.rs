@@ -14,7 +14,7 @@ pub struct TestBackend {
 
 impl TestBackend {
     pub fn new(path: PathBuf) -> std::io::Result<Self> {
-        let crypto = RustCrypto::default();
+        let crypto = Self::create_crypto();
 
         let key_store = match File::open(&path) {
             Ok(mut f) => TestKeyStore::read(&mut f),
@@ -27,6 +27,10 @@ impl TestBackend {
             path: path,
             key_store,
         })
+    }
+
+    pub fn create_crypto() -> RustCrypto {
+        RustCrypto::default()
     }
 }
 

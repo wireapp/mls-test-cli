@@ -20,7 +20,7 @@ use std::path::PathBuf;
 #[clap(name = "mls-test-cli", version = env!("CARGO_PKG_VERSION"))]
 struct Cli {
     #[clap(short, long)]
-    store: String,
+    store: Option<String>,
     #[clap(subcommand)]
     command: Command,
 }
@@ -228,6 +228,11 @@ enum ExternalProposalCommand {
     Add {},
 }
 
+fn create_backend(store: Option<String>) -> TestBackend {
+    let store = store.expect("Please specify a key store with --store.");
+    TestBackend::new(PathBuf::from(store)).unwrap()
+}
+
 fn path_reader(path: &str) -> io::Result<Box<dyn Read>> {
     if path == "-" {
         Ok(Box::new(io::stdin()))
@@ -305,7 +310,6 @@ async fn new_key_package(
 
 pub async fn run() {
     let cli = Cli::parse();
-    let backend = TestBackend::new(PathBuf::from(&cli.store)).unwrap();
     match cli.command {
         Command::Init {
             client_id,
@@ -314,6 +318,7 @@ pub async fn run() {
             handle,
         } => {
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
+            let backend = create_backend(cli.store);
             let ks = backend.key_store();
             match ks.read_value::<serde_json::Value>(b"self").unwrap() {
                 Some(_) => {
@@ -338,6 +343,7 @@ pub async fn run() {
                     ciphersuite,
                 },
         } => {
+            let backend = create_backend(cli.store);
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
             let key_package = new_key_package(&backend, lifetime, ciphersuite).await;
 
@@ -390,7 +396,7 @@ pub async fn run() {
                 let mut data = path_reader(&file).unwrap();
                 let key_package = KeyPackageIn::tls_deserialize(&mut data).unwrap();
                 key_package
-                    .standalone_validate(backend.crypto(), ProtocolVersion::Mls10)
+                    .standalone_validate(&TestBackend::create_crypto(), ProtocolVersion::Mls10)
                     .unwrap()
             };
             match mode {
@@ -423,14 +429,16 @@ pub async fn run() {
         } => {
             let mut data = path_reader(&key_package).unwrap();
             let key_package = KeyPackageIn::tls_deserialize(&mut data).unwrap();
+            let crypto = TestBackend::create_crypto();
             let key_package = key_package
-                .standalone_validate(backend.crypto(), ProtocolVersion::Mls10)
+                .standalone_validate(&crypto, ProtocolVersion::Mls10)
                 .unwrap();
             io::stdout()
-                .write_all(key_package.hash_ref(backend.crypto()).unwrap().as_slice())
+                .write_all(key_package.hash_ref(&crypto).unwrap().as_slice())
                 .unwrap();
         }
         Command::PublicKey => {
+            let backend = create_backend(cli.store);
             let cred_bundle = CredentialBundle::read(&backend);
             let bytes = cred_bundle.keys().public();
             io::stdout().write_all(bytes).unwrap();
@@ -444,6 +452,7 @@ pub async fn run() {
                     ciphersuite,
                 },
         } => {
+            let backend = create_backend(cli.store);
             let cred_bundle = CredentialBundle::read(&backend);
             let group_id = group_id_from_str(&group_id);
             let backend_credential = Credential::new_basic(b"backend".to_vec());
@@ -491,6 +500,7 @@ pub async fn run() {
             let ciphersuite = welcome.ciphersuite();
             let group_config = build_configuration(vec![], ciphersuite);
 
+            let backend = create_backend(cli.store);
             let group = MlsGroup::new_from_welcome(&backend, &group_config, welcome, None)
                 .await
                 .unwrap();
@@ -508,6 +518,7 @@ pub async fn run() {
                     in_place,
                 },
         } => {
+            let backend = create_backend(cli.store);
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
                 let data = path_reader(&group_in).unwrap();
@@ -570,6 +581,7 @@ pub async fn run() {
                     in_place,
                 },
         } => {
+            let backend = create_backend(cli.store);
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
                 let data = path_reader(&group_in).unwrap();
@@ -613,6 +625,7 @@ pub async fn run() {
             in_place,
             group_out,
         } => {
+            let backend = create_backend(cli.store);
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
                 let data = path_reader(&group_in).unwrap();
@@ -635,6 +648,7 @@ pub async fn run() {
             in_place,
             command: ProposalCommand::Add { key_package },
         } => {
+            let backend = create_backend(cli.store);
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
                 let data = path_reader(&group_in).unwrap();
@@ -663,6 +677,7 @@ pub async fn run() {
             in_place,
             command: ProposalCommand::Remove { index },
         } => {
+            let backend = create_backend(cli.store);
             let cred_bundle = CredentialBundle::read(&backend);
             let index = LeafNodeIndex::new(index);
             let mut group = {
@@ -686,6 +701,7 @@ pub async fn run() {
             in_place,
             command: ProposalCommand::ReInit { ciphersuite },
         } => {
+            let backend = create_backend(cli.store);
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
                 let data = path_reader(&group_in).unwrap();
@@ -718,6 +734,7 @@ pub async fn run() {
             command: ExternalProposalCommand::Add {},
             ciphersuite,
         } => {
+            let backend = create_backend(cli.store);
             let cred_bundle = CredentialBundle::read(&backend);
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
             let key_package = new_key_package(&backend, None, ciphersuite).await;
@@ -738,6 +755,7 @@ pub async fn run() {
             in_place,
             welcome_out,
         } => {
+            let backend = create_backend(cli.store);
             let cred_bundle = CredentialBundle::read(&backend);
             let mut group = {
                 let data = path_reader(&group_in).unwrap();
@@ -775,6 +793,7 @@ pub async fn run() {
             group_out,
             ciphersuite,
         } => {
+            let backend = create_backend(cli.store);
             let cred_bundle = CredentialBundle::read(&backend);
             let group_info = {
                 let mut data = path_reader(&group_info_in).unwrap();
@@ -832,6 +851,7 @@ pub async fn run() {
                 MlsMessageInBody::PublicMessage(m) => m.into(),
                 _ => panic!("Unexpected message type"),
             };
+            let backend = create_backend(cli.store);
             let message = group.process_message(&backend, pmsg).await.unwrap();
 
             // store proposal or apply commit
