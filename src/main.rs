@@ -1,4 +1,6 @@
 mod backend;
+mod client;
+mod credential;
 mod keystore;
 
 use serde_json::json;
@@ -6,9 +8,10 @@ use serde_json::json;
 use futures_lite::future;
 use openmls::prelude::group_info::VerifiableGroupInfo;
 use openmls::prelude::*;
-use openmls_basic_credential::SignatureKeyPair;
 
 use backend::TestBackend;
+use client::ClientId;
+use credential::{CredentialBundle, CredentialType};
 
 use clap::{Parser, Subcommand};
 use io::Read;
@@ -16,165 +19,6 @@ use io::Write;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use uuid::Uuid;
-
-#[derive(Debug)]
-struct ClientId {
-    user: String,
-    client: String,
-    domain: String,
-}
-
-impl core::str::FromStr for ClientId {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, String> {
-        let dom_index = s.find('@').ok_or("No domain separator")?;
-        let cli_index = s[0..dom_index].find(':').ok_or("No client ID separator")?;
-        Ok(ClientId {
-            user: s[0..cli_index].to_string(),
-            client: s[cli_index + 1..dom_index].to_string(),
-            domain: s[dom_index + 1..].to_string(),
-        })
-    }
-}
-
-impl ClientId {
-    fn to_vec(&self) -> Vec<u8> {
-        let mut out = Vec::new();
-        out.extend(self.user.bytes());
-        out.push(b':');
-        out.extend(self.client.bytes());
-        out.push(b'@');
-        out.extend(self.domain.bytes());
-        out
-    }
-
-    fn to_x509(&self, handle: &str) -> String {
-        let uuid = Uuid::parse_str(&self.user).unwrap();
-        let uid = base64::encode_config(uuid.into_bytes(), base64::URL_SAFE_NO_PAD);
-        format!(
-            "subjectAltName=URI:wireapp://{}%21{}@{}, URI:wireapp://%40{}@{}",
-            uid, self.client, self.domain, handle, self.domain
-        )
-    }
-}
-
-#[derive(Debug)]
-enum CredentialType {
-    Basic,
-    X509,
-}
-
-impl core::str::FromStr for CredentialType {
-    type Err = String;
-
-    fn from_str(x: &str) -> Result<Self, String> {
-        match x {
-            "basic" => Ok(Self::Basic),
-            "x509" => Ok(Self::X509),
-            _ => Err(format!("Invalid credential type {}", x)),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct CredentialBundle {
-    credential: Credential,
-    keys: SignatureKeyPair,
-}
-
-impl CredentialBundle {
-    fn credential_with_key(&self) -> CredentialWithKey {
-        CredentialWithKey {
-            credential: self.credential.clone(),
-            signature_key: self.keys.public().into(),
-        }
-    }
-
-    fn new(
-        backend: &impl OpenMlsCryptoProvider,
-        credential_type: CredentialType,
-        client_id: ClientId,
-        ciphersuite: Ciphersuite,
-        handle: Option<String>,
-    ) -> Self {
-        let keys = SignatureKeyPair::new(
-            ciphersuite.signature_algorithm(),
-            &mut *backend.rand().borrow_rand().unwrap(),
-        )
-        .unwrap();
-        let credential = match credential_type {
-            CredentialType::Basic => Credential::new_basic(client_id.to_vec()),
-            CredentialType::X509 => {
-                // generate a self-signed certificate
-                let handle = handle.unwrap_or(client_id.user.clone());
-                let subject = format!("/O={}/CN={}", client_id.domain, handle);
-                let san = client_id.to_x509(&handle);
-                let openssl = std::process::Command::new("openssl")
-                    .args([
-                        "req",
-                        "-new",
-                        "-x509",
-                        "-nodes",
-                        "-days",
-                        "3650",
-                        "-key",
-                        "/dev/stdin",
-                        "-keyform",
-                        "DER",
-                        "-out",
-                        "/dev/stdout",
-                        "-keyout",
-                        "/dev/null",
-                        "-outform",
-                        "DER",
-                        "-subj",
-                        &subject,
-                        "-addext",
-                        &san,
-                    ])
-                    .stdin(std::process::Stdio::piped())
-                    .stdout(std::process::Stdio::piped())
-                    .stderr(std::process::Stdio::piped())
-                    .spawn()
-                    .unwrap();
-                let mut stdin = openssl.stdin.as_ref().unwrap();
-                // add hardcoded pkcs8 envelope
-                stdin
-                    .write_all(b"\x30\x2e\x02\x01\x00\x30\x05\x06\x03\x2b\x65\x70\x04\x22\x04\x20")
-                    .unwrap();
-                stdin.write_all(keys.private()).unwrap();
-                let out = openssl.wait_with_output().unwrap();
-                if !out.status.success() {
-                    panic!(
-                        "openssl failed: {}",
-                        core::str::from_utf8(&out.stderr).unwrap()
-                    );
-                }
-                let cert = out.stdout;
-                Credential::new_x509(vec![cert.clone(), cert]).unwrap()
-            }
-        };
-        Self { credential, keys }
-    }
-
-    fn store(&self, backend: &TestBackend) {
-        backend
-            .key_store()
-            .store_value(b"self", &(&self.keys, &self.credential))
-            .unwrap();
-    }
-
-    fn read(backend: &TestBackend) -> Self {
-        let ks = backend.key_store();
-        let (keys, credential) = ks
-            .read_value(b"self")
-            .ok()
-            .flatten()
-            .expect("Credential not initialised. Please run `init` first.");
-        Self { credential, keys }
-    }
-}
 
 #[derive(Parser, Debug)]
 #[clap(name = "mls-test-cli", version = env!("CARGO_PKG_VERSION"))]
@@ -456,7 +300,7 @@ async fn new_key_package(
                 version: ProtocolVersion::default(),
             },
             backend,
-            &cred_bundle.keys,
+            cred_bundle.keys(),
             cred_bundle.credential_with_key(),
         )
         .await
@@ -592,7 +436,7 @@ async fn run() {
         }
         Command::PublicKey => {
             let cred_bundle = CredentialBundle::read(&backend);
-            let bytes = cred_bundle.keys.public();
+            let bytes = cred_bundle.keys().public();
             io::stdout().write_all(bytes).unwrap();
         }
         Command::Group {
@@ -625,7 +469,7 @@ async fn run() {
 
             let group = MlsGroup::new_with_group_id(
                 &backend,
-                &cred_bundle.keys,
+                cred_bundle.keys(),
                 &group_config,
                 group_id,
                 cred_bundle.credential_with_key(),
@@ -687,12 +531,12 @@ async fn run() {
 
             let (handshake, welcome, group_info) = if kps.is_empty() {
                 group
-                    .commit_to_pending_proposals(&backend, &cred_bundle.keys)
+                    .commit_to_pending_proposals(&backend, cred_bundle.keys())
                     .await
                     .unwrap()
             } else {
                 let (commit, welcome, group_info) = group
-                    .add_members(&backend, &cred_bundle.keys, kps)
+                    .add_members(&backend, cred_bundle.keys(), kps)
                     .await
                     .unwrap();
                 (commit, Some(welcome), group_info)
@@ -742,7 +586,7 @@ async fn run() {
                 .collect::<Vec<_>>();
 
             let (commit, welcome, group_info) = group
-                .remove_members(&backend, &cred_bundle.keys, &indices[..])
+                .remove_members(&backend, cred_bundle.keys(), &indices[..])
                 .await
                 .unwrap();
 
@@ -779,7 +623,7 @@ async fn run() {
                 load_group(data)
             };
             let message = group
-                .create_message(&backend, &cred_bundle.keys, text.as_bytes())
+                .create_message(&backend, cred_bundle.keys(), text.as_bytes())
                 .unwrap();
             message.tls_serialize(&mut io::stdout()).unwrap();
 
@@ -807,7 +651,7 @@ async fn run() {
                     .unwrap()
             };
             let (message, _) = group
-                .propose_add_member(&backend, &cred_bundle.keys, key_package.into())
+                .propose_add_member(&backend, cred_bundle.keys(), key_package.into())
                 .unwrap();
             message.tls_serialize(&mut io::stdout()).unwrap();
 
@@ -830,7 +674,7 @@ async fn run() {
                 load_group(data)
             };
             let message = group
-                .propose_remove_member(&backend, &cred_bundle.keys, index)
+                .propose_remove_member(&backend, cred_bundle.keys(), index)
                 .unwrap();
             message.tls_serialize(&mut io::stdout()).unwrap();
 
@@ -858,7 +702,7 @@ async fn run() {
             let (message, _) = group
                 .propose_reinit(
                     &backend,
-                    &cred_bundle.keys,
+                    cred_bundle.keys(),
                     Extensions::empty(),
                     ciphersuite,
                     ProtocolVersion::Mls10,
@@ -886,7 +730,7 @@ async fn run() {
                 key_package,
                 group_id,
                 GroupEpoch::from(epoch),
-                &cred_bundle.keys,
+                cred_bundle.keys(),
             )
             .unwrap();
             proposal.tls_serialize(&mut io::stdout()).unwrap();
@@ -905,7 +749,7 @@ async fn run() {
             };
 
             let (message, welcome, group_info) = group
-                .commit_to_pending_proposals(&backend, &cred_bundle.keys)
+                .commit_to_pending_proposals(&backend, cred_bundle.keys())
                 .await
                 .unwrap();
             message.tls_serialize(&mut io::stdout()).unwrap();
@@ -944,7 +788,7 @@ async fn run() {
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
             let (mut group, message, group_info) = MlsGroup::join_by_external_commit(
                 &backend,
-                &cred_bundle.keys,
+                cred_bundle.keys(),
                 None,
                 group_info,
                 &build_configuration(vec![], ciphersuite),
