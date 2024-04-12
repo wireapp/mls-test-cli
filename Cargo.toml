@@ -8,22 +8,18 @@ openmls = "1.0.0"
 openmls_traits = "0.2"
 openmls_rust_crypto = "0.2"
 openmls_basic_credential = "0.2"
-tls_codec = { version = "0.4.0", features = ["derive", "serde", "mls"] }
+tls_codec = { version = "0.4.1", features = ["derive", "serde", "mls"] }
 futures-lite = "1.12"
 async-trait = "0.1"
-sha256 = "<1.2"
 sha2 = { version = "0.10", features = ["oid"] }
 hex = "0.4"
-oid-registry = "0.6"
 pkcs8 = "0.10"
-x509-cert = { version = "<0.2.5", features = ["builder"] }
+x509-cert = { version = "0.2.5", features = ["builder"] }
 der = "0.7"
 ecdsa = { version = "0.16", features = ["der", "pkcs8"] }
 p256 = { version = "0.13", features = ["pkcs8"] }
 p384 = { version = "0.13", features = ["pkcs8"] }
 ed25519-dalek = {version = "2.1", features = ["pkcs8"] }
-subtle = "2.5"
-generic-array = "0.14"
 
 base64 = "0.13.0"
 uuid = "1.0.0-alpha"
@@ -46,25 +42,5 @@ branch = "feat/rfc9420"
 [patch.crates-io.openmls_basic_credential]
 git = "https://github.com/wireapp/openmls"
 branch = "feat/rfc9420"
-
-
-# [patch.crates-io.hpke-rs]
-# git = "https://github.com/franziskuskiefer/hpke-rs.git"
-
-# [patch.crates-io.hpke-rs-crypto]
-# git = "https://github.com/franziskuskiefer/hpke-rs.git"
-
-# [patch.crates-io.hpke-rs-rust-crypto]
-# git = "https://github.com/franziskuskiefer/hpke-rs.git"
-
-# This pin should be removed in favour for upstream when the next release after
-# v0.4.0 surfaces.
-[patch.crates-io.tls_codec]
-git = "https://github.com/RustCrypto/formats"
-rev = "b002bd979afda399b7a652dee40506b66fd69b4b"
-
-[dev-dependencies]
-tempdir = "0.3"
-tokio = { version = "1.35", features = ["full"] }
 
 [workspace]
