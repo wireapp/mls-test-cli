@@ -1,4 +1,5 @@
 use uuid::Uuid;
+use x509_cert::ext::pkix::name::GeneralName;
 
 #[derive(Debug)]
 pub struct ClientId {
@@ -31,12 +32,14 @@ impl ClientId {
         out
     }
 
-    pub fn to_x509(&self, handle: &str) -> String {
+    pub fn to_x509(&self, handle: &str) -> impl Iterator<Item = GeneralName> {
         let uuid = Uuid::parse_str(&self.user).unwrap();
         let uid = base64::encode_config(uuid.into_bytes(), base64::URL_SAFE_NO_PAD);
-        format!(
-            "subjectAltName=URI:wireapp://{}%21{}@{}, URI:wireapp://%40{}@{}",
-            uid, self.client, self.domain, handle, self.domain
-        )
+        [
+            format!("wireapp://{}%21{}@{}", uid, self.client, self.domain),
+            format!("wireapp://%40{}@{}", handle, self.domain),
+        ]
+        .into_iter()
+        .map(|n| GeneralName::UniformResourceIdentifier(n.try_into().unwrap()))
     }
 }
