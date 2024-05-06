@@ -1,10 +1,38 @@
-use crate::keystore::TestKeyStore;
-use openmls::prelude::OpenMlsCryptoProvider;
-use openmls_rust_crypto::RustCrypto;
-
 use std::fs::File;
 use std::io::ErrorKind;
 use std::path::PathBuf;
+
+use openmls::prelude::OpenMlsCryptoProvider;
+use openmls_rust_crypto::{DummyAuthenticationService, RustCrypto};
+
+use crate::keystore::{DummyKeyStore, TestKeyStore};
+
+// used for show and key-package commands
+#[derive(Default)]
+pub struct DummyBackend(RustCrypto);
+
+impl OpenMlsCryptoProvider for DummyBackend {
+    type CryptoProvider = RustCrypto;
+    type RandProvider = RustCrypto;
+    type KeyStoreProvider = DummyKeyStore;
+    type AuthenticationServiceProvider = DummyAuthenticationService;
+
+    fn crypto(&self) -> &Self::CryptoProvider {
+        &self.0
+    }
+
+    fn rand(&self) -> &Self::RandProvider {
+        &self.0
+    }
+
+    fn key_store(&self) -> &Self::KeyStoreProvider {
+        &DummyKeyStore
+    }
+
+    fn authentication_service(&self) -> &Self::AuthenticationServiceProvider {
+        &DummyAuthenticationService
+    }
+}
 
 pub struct TestBackend {
     crypto: RustCrypto,
@@ -44,6 +72,7 @@ impl OpenMlsCryptoProvider for TestBackend {
     type CryptoProvider = RustCrypto;
     type RandProvider = RustCrypto;
     type KeyStoreProvider = TestKeyStore;
+    type AuthenticationServiceProvider = DummyAuthenticationService;
 
     fn crypto(&self) -> &Self::CryptoProvider {
         &self.crypto
@@ -55,5 +84,9 @@ impl OpenMlsCryptoProvider for TestBackend {
 
     fn key_store(&self) -> &Self::KeyStoreProvider {
         &self.key_store
+    }
+
+    fn authentication_service(&self) -> &Self::AuthenticationServiceProvider {
+        &DummyAuthenticationService
     }
 }

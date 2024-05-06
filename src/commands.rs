@@ -1,10 +1,11 @@
 use serde_json::json;
 
+use futures::future;
 use openmls::prelude::group_info::VerifiableGroupInfo;
 use openmls::prelude::*;
 
 use crate::{
-    backend::TestBackend,
+    backend::{DummyBackend, TestBackend},
     client::ClientId,
     credential::{CredentialBundle, CredentialType},
 };
@@ -396,7 +397,8 @@ pub async fn run() {
                 let mut data = path_reader(&file).unwrap();
                 let key_package = KeyPackageIn::tls_deserialize(&mut data).unwrap();
                 key_package
-                    .standalone_validate(&TestBackend::create_crypto(), ProtocolVersion::Mls10)
+                    .standalone_validate(&DummyBackend::default(), ProtocolVersion::Mls10, false)
+                    .await
                     .unwrap()
             };
             match mode {
@@ -429,12 +431,13 @@ pub async fn run() {
         } => {
             let mut data = path_reader(&key_package).unwrap();
             let key_package = KeyPackageIn::tls_deserialize(&mut data).unwrap();
-            let crypto = TestBackend::create_crypto();
+            let backend = DummyBackend::default();
             let key_package = key_package
-                .standalone_validate(&crypto, ProtocolVersion::Mls10)
+                .standalone_validate(&backend, ProtocolVersion::Mls10, false)
+                .await
                 .unwrap();
             io::stdout()
-                .write_all(key_package.hash_ref(&crypto).unwrap().as_slice())
+                .write_all(key_package.hash_ref(backend.crypto()).unwrap().as_slice())
                 .unwrap();
         }
         Command::PublicKey => {
@@ -524,17 +527,24 @@ pub async fn run() {
                 let data = path_reader(&group_in).unwrap();
                 load_group(data)
             };
-            let kps = key_packages
-                .into_iter()
-                .map(|kp| {
-                    let mut data = path_reader(&kp)
-                        .expect(&format!("Could not open key package file: {}", kp));
-                    let kp = KeyPackageIn::tls_deserialize(&mut data).unwrap();
-                    kp.standalone_validate(backend.crypto(), ProtocolVersion::Mls10)
-                        .unwrap()
-                })
-                .map(Into::into)
-                .collect::<Vec<_>>();
+
+            async fn read_key_package(backend: &TestBackend, kp: String) -> KeyPackageIn {
+                let mut data =
+                    path_reader(&kp).expect(&format!("Could not open key package file: {}", kp));
+                let kp = KeyPackageIn::tls_deserialize(&mut data).unwrap();
+                let kp = kp
+                    .standalone_validate(backend, ProtocolVersion::Mls10, false)
+                    .await
+                    .unwrap();
+                Into::into(kp)
+            }
+
+            let kps = future::join_all(
+                key_packages
+                    .into_iter()
+                    .map(|kp| read_key_package(&backend, kp)),
+            )
+            .await;
 
             let (handshake, welcome, group_info) = if kps.is_empty() {
                 group
@@ -657,11 +667,13 @@ pub async fn run() {
             let key_package = {
                 let mut data = path_reader(&key_package).unwrap();
                 let kp = KeyPackageIn::tls_deserialize(&mut data).unwrap();
-                kp.standalone_validate(backend.crypto(), ProtocolVersion::Mls10)
+                kp.standalone_validate(&backend, ProtocolVersion::Mls10, false)
+                    .await
                     .unwrap()
             };
             let (message, _) = group
                 .propose_add_member(&backend, cred_bundle.keys(), key_package.into())
+                .await
                 .unwrap();
             message.tls_serialize(&mut io::stdout()).unwrap();
 

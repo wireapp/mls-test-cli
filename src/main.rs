@@ -4,8 +4,8 @@ mod commands;
 mod credential;
 mod keystore;
 
-use futures_lite::future;
+use futures::executor::block_on;
 
 fn main() {
-    future::block_on(commands::run());
+    block_on(commands::run());
 }

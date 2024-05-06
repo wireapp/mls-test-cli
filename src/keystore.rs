@@ -24,9 +24,7 @@ impl serde::Serialize for Key {
 }
 
 impl<'de> serde::Deserialize<'de> for Key {
-    fn deserialize<D: serde::Deserializer<'de>>(
-        d: D,
-    ) -> Result<Self, D::Error> {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let value = base64::decode(String::deserialize(d)?)
             .map_err(|_| serde::de::Error::custom("Invalid base64 key"))?;
         Ok(Key(value))
@@ -100,11 +98,7 @@ impl From<std::io::Error> for TestKeyStoreError {
 impl OpenMlsKeyStore for TestKeyStore {
     type Error = TestKeyStoreError;
 
-    async fn store<V: MlsEntity + Sync>(
-        &self,
-        k: &[u8],
-        v: &V,
-    ) -> Result<(), Self::Error> {
+    async fn store<V: MlsEntity + Sync>(&self, k: &[u8], v: &V) -> Result<(), Self::Error> {
         self.store_value(k, v).map_err(|e| e.to_string())?;
         Ok(())
     }
@@ -115,6 +109,25 @@ impl OpenMlsKeyStore for TestKeyStore {
 
     async fn delete<V: MlsEntity>(&self, k: &[u8]) -> Result<(), Self::Error> {
         self.delete_entry(k);
+        Ok(())
+    }
+}
+
+pub struct DummyKeyStore;
+
+#[async_trait::async_trait]
+impl OpenMlsKeyStore for DummyKeyStore {
+    type Error = TestKeyStoreError;
+
+    async fn store<V: MlsEntity + Sync>(&self, _k: &[u8], _v: &V) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn read<V: MlsEntity>(&self, _k: &[u8]) -> Option<V> {
+        None
+    }
+
+    async fn delete<V: MlsEntity>(&self, _k: &[u8]) -> Result<(), Self::Error> {
         Ok(())
     }
 }

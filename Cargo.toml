@@ -9,7 +9,7 @@ openmls_traits = "0.2"
 openmls_rust_crypto = "0.2"
 openmls_basic_credential = "0.2"
 tls_codec = { version = "0.4.1", features = ["derive", "serde", "mls"] }
-futures-lite = "1.12"
+futures = "0.3.30"
 async-trait = "0.1"
 sha2 = { version = "0.10", features = ["oid"] }
 hex = "0.4"
@@ -29,18 +29,18 @@ serde_json = "1.0.96"
 
 [patch.crates-io.openmls]
 git = "https://github.com/wireapp/openmls"
-branch = "feat/rfc9420"
+branch = "wire/stable"
 
 [patch.crates-io.openmls_traits]
 git = "https://github.com/wireapp/openmls"
-branch = "feat/rfc9420"
+branch = "wire/stable"
 
 [patch.crates-io.openmls_rust_crypto]
 git = "https://github.com/wireapp/openmls"
-branch = "feat/rfc9420"
+branch = "wire/stable"
 
 [patch.crates-io.openmls_basic_credential]
 git = "https://github.com/wireapp/openmls"
-branch = "feat/rfc9420"
+branch = "wire/stable"
 
 [workspace]
