@@ -11,11 +11,11 @@ use crate::{
 };
 
 use clap::{Parser, Subcommand};
-use io::Read;
-use io::Write;
-use std::fs;
-use std::io;
-use std::path::PathBuf;
+use std::{
+    fs,
+    io::{self, BufRead, Read, Write},
+    path::PathBuf,
+};
 
 #[derive(Parser, Debug)]
 #[clap(name = "mls-test-cli", version = env!("CARGO_PKG_VERSION"))]
@@ -26,7 +26,7 @@ struct Cli {
     command: Command,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum ShowMode {
     Json,
     Rust,
@@ -147,6 +147,7 @@ enum Command {
 #[derive(Subcommand, Debug)]
 enum ShowCommand {
     Message { file: String },
+    Bundle { file: String },
     KeyPackage { file: String },
     GroupInfo { file: String },
 }
@@ -359,35 +360,7 @@ pub async fn run() {
                 let mut data = path_reader(&file).unwrap();
                 MlsMessageIn::tls_deserialize(&mut data).unwrap()
             };
-            match mode {
-                ShowMode::Rust => println!("{:#?}", message),
-                ShowMode::Json => match message.extract() {
-                    MlsMessageInBody::PublicMessage(pmsg) => {
-                        let v = serde_json::to_value(&pmsg).unwrap();
-                        let obj = json!({ "type": "public_message",
-                                      "message": v });
-                        serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
-                    }
-                    MlsMessageInBody::PrivateMessage(_) => {
-                        let obj = json!({ "type": "private_message" });
-                        serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
-                    }
-                    MlsMessageInBody::Welcome(_) => {
-                        let obj = json!({ "type": "welcome" });
-                        serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
-                    }
-                    MlsMessageInBody::GroupInfo(_) => {
-                        let obj = json!({ "type": "group_info" });
-                        serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
-                    }
-                    MlsMessageInBody::KeyPackage(kp) => {
-                        let v = serde_json::to_value(&kp).unwrap();
-                        let obj = json!({ "type": "key_package",
-                                      "message": v });
-                        serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
-                    }
-                },
-            }
+            show_message(mode, message);
         }
         Command::Show {
             mode,
@@ -425,6 +398,16 @@ pub async fn run() {
                 VerifiableGroupInfo::tls_deserialize(&mut data).unwrap()
             };
             eprintln!("{:#?}", group_info);
+        }
+        Command::Show {
+            mode,
+            command: ShowCommand::Bundle { file },
+        } => {
+            let mut r = std::io::BufReader::new(path_reader(&file).unwrap());
+            while !r.fill_buf().unwrap().is_empty() {
+                let message = MlsMessageIn::tls_deserialize(&mut r).unwrap();
+                show_message(mode, message);
+            }
         }
         Command::KeyPackage {
             command: KeyPackageCommand::Ref { key_package },
@@ -890,5 +873,37 @@ pub async fn run() {
                 save_group(&group, &mut writer);
             }
         }
+    }
+}
+
+fn show_message(mode: ShowMode, message: MlsMessageIn) {
+    match mode {
+        ShowMode::Rust => println!("{:#?}", message),
+        ShowMode::Json => match message.extract() {
+            MlsMessageInBody::PublicMessage(pmsg) => {
+                let v = serde_json::to_value(&pmsg).unwrap();
+                let obj = json!({ "type": "public_message",
+                                      "message": v });
+                serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+            }
+            MlsMessageInBody::PrivateMessage(_) => {
+                let obj = json!({ "type": "private_message" });
+                serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+            }
+            MlsMessageInBody::Welcome(_) => {
+                let obj = json!({ "type": "welcome" });
+                serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+            }
+            MlsMessageInBody::GroupInfo(_) => {
+                let obj = json!({ "type": "group_info" });
+                serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+            }
+            MlsMessageInBody::KeyPackage(kp) => {
+                let v = serde_json::to_value(&kp).unwrap();
+                let obj = json!({ "type": "key_package",
+                                      "message": v });
+                serde_json::to_writer_pretty(io::stdout(), &obj).unwrap();
+            }
+        },
     }
 }
