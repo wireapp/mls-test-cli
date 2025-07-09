@@ -397,7 +397,7 @@ pub async fn run() {
                 let mut data = path_reader(&file).unwrap();
                 VerifiableGroupInfo::tls_deserialize(&mut data).unwrap()
             };
-            eprintln!("{:#?}", group_info);
+            println!("{:#?}", group_info);
         }
         Command::Show {
             mode,
