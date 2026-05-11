@@ -263,7 +263,8 @@ fn load_group<R: Read>(reader: R) -> MlsGroup {
 }
 
 fn group_id_from_str(group_id: &str) -> GroupId {
-    let group_id = base64::decode(group_id).expect("Failed to decode group_id as base64");
+    let group_id =
+        base64::decode(group_id).expect("Failed to decode group_id as base64");
     GroupId::from_slice(&group_id)
 }
 
@@ -347,7 +348,8 @@ pub async fn run() {
         } => {
             let backend = create_backend(cli.store);
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
-            let key_package = new_key_package(&backend, lifetime, ciphersuite).await;
+            let key_package =
+                new_key_package(&backend, lifetime, ciphersuite).await;
 
             // output key package to standard output
             key_package.tls_serialize(&mut io::stdout()).unwrap();
@@ -368,9 +370,14 @@ pub async fn run() {
         } => {
             let kp = {
                 let mut data = path_reader(&file).unwrap();
-                let key_package = KeyPackageIn::tls_deserialize(&mut data).unwrap();
+                let key_package =
+                    KeyPackageIn::tls_deserialize(&mut data).unwrap();
                 key_package
-                    .standalone_validate(&DummyBackend::default(), ProtocolVersion::Mls10, false)
+                    .standalone_validate(
+                        &DummyBackend::default(),
+                        ProtocolVersion::Mls10,
+                        false,
+                    )
                     .await
                     .unwrap()
             };
@@ -420,7 +427,9 @@ pub async fn run() {
                 .await
                 .unwrap();
             io::stdout()
-                .write_all(key_package.hash_ref(backend.crypto()).unwrap().as_slice())
+                .write_all(
+                    key_package.hash_ref(backend.crypto()).unwrap().as_slice(),
+                )
                 .unwrap();
         }
         Command::PublicKey => {
@@ -450,13 +459,15 @@ pub async fn run() {
                         reader.read_to_end(&mut data).unwrap();
                         SignaturePublicKey::from(data)
                     };
-                    let backend_sender = ExternalSender::new(removal_key, backend_credential);
+                    let backend_sender =
+                        ExternalSender::new(removal_key, backend_credential);
                     vec![backend_sender]
                 }
                 None => vec![],
             };
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
-            let group_config = build_configuration(external_senders, ciphersuite);
+            let group_config =
+                build_configuration(external_senders, ciphersuite);
 
             let group = MlsGroup::new_with_group_id(
                 &backend,
@@ -473,8 +484,10 @@ pub async fn run() {
         Command::Group {
             command: GroupCommand::FromWelcome { welcome, group_out },
         } => {
-            let message =
-                MlsMessageIn::tls_deserialize(&mut path_reader(&welcome).unwrap()).unwrap();
+            let message = MlsMessageIn::tls_deserialize(
+                &mut path_reader(&welcome).unwrap(),
+            )
+            .unwrap();
 
             let welcome = match message.extract() {
                 MlsMessageInBody::Welcome(welcome) => welcome,
@@ -487,9 +500,14 @@ pub async fn run() {
             let group_config = build_configuration(vec![], ciphersuite);
 
             let backend = create_backend(cli.store);
-            let group = MlsGroup::new_from_welcome(&backend, &group_config, welcome, None)
-                .await
-                .unwrap();
+            let group = MlsGroup::new_from_welcome(
+                &backend,
+                &group_config,
+                welcome,
+                None,
+            )
+            .await
+            .unwrap();
             let mut group_out = fs::File::create(group_out).unwrap();
             save_group(&group, &mut group_out);
         }
@@ -511,9 +529,14 @@ pub async fn run() {
                 load_group(data)
             };
 
-            async fn read_key_package(backend: &TestBackend, kp: String) -> KeyPackageIn {
-                let mut data =
-                    path_reader(&kp).expect(&format!("Could not open key package file: {}", kp));
+            async fn read_key_package(
+                backend: &TestBackend,
+                kp: String,
+            ) -> KeyPackageIn {
+                let mut data = path_reader(&kp).expect(&format!(
+                    "Could not open key package file: {}",
+                    kp
+                ));
                 let kp = KeyPackageIn::tls_deserialize(&mut data).unwrap();
                 let kp = kp
                     .standalone_validate(backend, ProtocolVersion::Mls10, false)
@@ -556,7 +579,9 @@ pub async fn run() {
                 save_group(&group, &mut writer);
             }
 
-            if let (Some(group_info_out), Some(group_info)) = (group_info_out, group_info) {
+            if let (Some(group_info_out), Some(group_info)) =
+                (group_info_out, group_info)
+            {
                 let mut writer = fs::File::create(group_info_out).unwrap();
                 group_info.tls_serialize(&mut writer).unwrap();
             }
@@ -605,7 +630,9 @@ pub async fn run() {
                 }
             }
 
-            if let (Some(group_info_out), Some(group_info)) = (group_info_out, group_info) {
+            if let (Some(group_info_out), Some(group_info)) =
+                (group_info_out, group_info)
+            {
                 let mut writer = fs::File::create(group_info_out).unwrap();
                 group_info.tls_serialize(&mut writer).unwrap();
             }
@@ -655,7 +682,11 @@ pub async fn run() {
                     .unwrap()
             };
             let (message, _) = group
-                .propose_add_member(&backend, cred_bundle.keys(), key_package.into())
+                .propose_add_member(
+                    &backend,
+                    cred_bundle.keys(),
+                    key_package.into(),
+                )
                 .await
                 .unwrap();
             message.tls_serialize(&mut io::stdout()).unwrap();
@@ -732,7 +763,8 @@ pub async fn run() {
             let backend = create_backend(cli.store);
             let cred_bundle = CredentialBundle::read(&backend);
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
-            let key_package = new_key_package(&backend, None, ciphersuite).await;
+            let key_package =
+                new_key_package(&backend, None, ciphersuite).await;
             let group_id = group_id_from_str(&group_id);
             let proposal = JoinProposal::new(
                 key_package,
@@ -777,7 +809,9 @@ pub async fn run() {
                 save_group(&group, &mut writer);
             }
 
-            if let (Some(group_info_out), Some(group_info)) = (group_info_out, group_info) {
+            if let (Some(group_info_out), Some(group_info)) =
+                (group_info_out, group_info)
+            {
                 let mut writer = fs::File::create(group_info_out).unwrap();
                 group_info.tls_serialize(&mut writer).unwrap();
             }
@@ -796,17 +830,18 @@ pub async fn run() {
             };
 
             let ciphersuite = parse_ciphersuite(&ciphersuite).unwrap();
-            let (mut group, message, group_info) = MlsGroup::join_by_external_commit(
-                &backend,
-                cred_bundle.keys(),
-                None,
-                group_info,
-                &build_configuration(vec![], ciphersuite),
-                &[],
-                cred_bundle.credential_with_key(),
-            )
-            .await
-            .unwrap();
+            let (mut group, message, group_info) =
+                MlsGroup::join_by_external_commit(
+                    &backend,
+                    cred_bundle.keys(),
+                    None,
+                    group_info,
+                    &build_configuration(vec![], ciphersuite),
+                    &[],
+                    cred_bundle.credential_with_key(),
+                )
+                .await
+                .unwrap();
 
             message.tls_serialize(&mut io::stdout()).unwrap();
 
@@ -816,7 +851,9 @@ pub async fn run() {
                 save_group(&group, &mut writer);
             }
 
-            if let (Some(group_info_out), Some(group_info)) = (group_info_out, group_info) {
+            if let (Some(group_info_out), Some(group_info)) =
+                (group_info_out, group_info)
+            {
                 let mut writer = fs::File::create(group_info_out).unwrap();
                 group_info.tls_serialize(&mut writer).unwrap();
             }
@@ -861,7 +898,9 @@ pub async fn run() {
                         .await
                         .expect("Could not merge commit");
                 }
-                ProcessedMessageContent::ExternalJoinProposalMessage(staged_proposal) => {
+                ProcessedMessageContent::ExternalJoinProposalMessage(
+                    staged_proposal,
+                ) => {
                     group.store_pending_proposal(*staged_proposal);
                 }
             }
