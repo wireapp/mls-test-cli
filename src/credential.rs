@@ -112,6 +112,14 @@ impl CredentialBundle {
 /// `CertificateBuilder`.
 struct Ed25519Signer(ed25519_dalek::SigningKey);
 
+struct P521Signer {
+    signing_key: p521::ecdsa::SigningKey,
+    verifying_key: P521VerifyingKey,
+}
+
+#[derive(Clone)]
+struct P521VerifyingKey(p521::PublicKey);
+
 pub struct Ed25519Signature(ed25519_dalek::Signature);
 impl pkcs8::spki::SignatureBitStringEncoding for Ed25519Signature {
     fn to_bitstring(&self) -> pkcs8::der::Result<pkcs8::der::asn1::BitString> {
@@ -127,11 +135,34 @@ impl signature::Keypair for Ed25519Signer {
     }
 }
 
+impl signature::Keypair for P521Signer {
+    type VerifyingKey = P521VerifyingKey;
+
+    fn verifying_key(&self) -> Self::VerifyingKey {
+        self.verifying_key.clone()
+    }
+}
+
+impl pkcs8::EncodePublicKey for P521VerifyingKey {
+    fn to_public_key_der(&self) -> pkcs8::spki::Result<pkcs8::Document> {
+        pkcs8::EncodePublicKey::to_public_key_der(&self.0)
+    }
+}
+
 impl pkcs8::spki::SignatureAlgorithmIdentifier for Ed25519Signer {
     type Params = der::AnyRef<'static>;
     const SIGNATURE_ALGORITHM_IDENTIFIER: pkcs8::spki::AlgorithmIdentifier<
         Self::Params,
     > = ed25519_dalek::pkcs8::ALGORITHM_ID;
+}
+
+impl pkcs8::spki::SignatureAlgorithmIdentifier for P521Signer {
+    type Params = der::AnyRef<'static>;
+    const SIGNATURE_ALGORITHM_IDENTIFIER: pkcs8::spki::AlgorithmIdentifier<Self::Params> =
+        pkcs8::spki::AlgorithmIdentifier {
+            oid: ecdsa::ECDSA_SHA512_OID,
+            parameters: None,
+        };
 }
 
 impl signature::Signer<Ed25519Signature> for Ed25519Signer {
@@ -140,6 +171,13 @@ impl signature::Signer<Ed25519Signature> for Ed25519Signer {
         message: &[u8],
     ) -> Result<Ed25519Signature, ed25519_dalek::SignatureError> {
         self.0.try_sign(message).map(Ed25519Signature)
+    }
+}
+
+impl signature::Signer<p521::ecdsa::DerSignature> for P521Signer {
+    fn try_sign(&self, message: &[u8]) -> Result<p521::ecdsa::DerSignature, signature::Error> {
+        let signature: p521::ecdsa::Signature = self.signing_key.try_sign(message)?;
+        Ok(signature.into())
     }
 }
 
@@ -193,6 +231,24 @@ impl Signer for p384::ecdsa::SigningKey {
     }
 }
 
+impl Signer for P521Signer {
+    type Signature = p521::ecdsa::DerSignature;
+
+    fn from_bytes(key: &[u8]) -> Self {
+        let signing_key = p521::ecdsa::SigningKey::from_slice(key).unwrap();
+        let verifying_key =
+            P521VerifyingKey(p521::SecretKey::from_slice(key).unwrap().public_key());
+        Self {
+            signing_key,
+            verifying_key,
+        }
+    }
+
+    fn public_key(&self) -> SubjectPublicKeyInfoOwned {
+        SubjectPublicKeyInfoOwned::from_key(self.verifying_key.clone()).unwrap()
+    }
+}
+
 fn generate_certificate_for_scheme(
     ss: SignatureScheme,
     key: &SignatureKeyPair,
@@ -212,6 +268,9 @@ fn generate_certificate_for_scheme(
             generate_certificate::<p384::ecdsa::SigningKey>(
                 key, client_id, handle,
             )
+        }
+        SignatureScheme::ECDSA_SECP521R1_SHA512 => {
+            generate_certificate::<P521Signer>(key, client_id, handle)
         }
         _ => panic!("Unsupported signature scheme"),
     }

@@ -753,6 +753,7 @@ dependencies = [
  "openmls_traits",
  "p256",
  "p384",
+ "p521",
  "pkcs8",
  "serde",
  "serde_json",
