@@ -19,6 +19,7 @@ der = "0.7"
 ecdsa = { version = "0.16", features = ["der", "pkcs8"] }
 p256 = { version = "0.13", features = ["pkcs8"] }
 p384 = { version = "0.13", features = ["pkcs8"] }
+p521 = { version = "0.13", features = ["pkcs8"] }
 ed25519-dalek = {version = "2.1", features = ["pkcs8"] }
 
 base64 = "0.13.0"
