@@ -747,6 +747,7 @@ dependencies = [
  "ed25519-dalek",
  "futures",
  "hex",
+ "hpke",
  "openmls",
  "openmls_basic_credential",
  "openmls_rust_crypto",

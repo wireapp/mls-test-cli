@@ -83,6 +83,15 @@ enum Command {
         #[clap(short, long, conflicts_with = "group-out")]
         in_place: bool,
     },
+    TargetedMessage {
+        #[clap(short, long)]
+        group_in: String,
+        #[clap(short, long, default_value = "1")]
+        counter: u32,
+        #[clap(short, long)]
+        recipient: u32,
+        text: String,
+    },
     Proposal {
         #[clap(short, long)]
         group_in: String,
@@ -661,6 +670,28 @@ pub async fn run() {
                 let mut writer = fs::File::create(group_out).unwrap();
                 save_group(&group, &mut writer);
             }
+        }
+        Command::TargetedMessage {
+            group_in,
+            counter,
+            recipient,
+            text,
+        } => {
+            let backend = create_backend(cli.store);
+            let credentials = CredentialBundle::read(&backend);
+            let group = {
+                let data = path_reader(&group_in).unwrap();
+                load_group(data)
+            };
+            let message = crate::targeted::create_targeted_message(
+                &backend,
+                &credentials,
+                &group,
+                counter,
+                recipient,
+                text.as_bytes(),
+            );
+            io::stdout().write_all(&message).unwrap();
         }
         Command::Proposal {
             group_in,

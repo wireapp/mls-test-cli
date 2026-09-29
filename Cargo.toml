@@ -13,6 +13,7 @@ futures = "0.3.30"
 async-trait = "0.1"
 sha2 = { version = "0.10", features = ["oid"] }
 hex = "0.4"
+hpke = { version = "0.12", features = ["x25519", "p256", "p384", "p521"] }
 pkcs8 = "0.10"
 x509-cert = { version = "0.2.5", features = ["builder"] }
 der = "0.7"
