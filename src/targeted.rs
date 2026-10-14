@@ -3,9 +3,9 @@ use openmls::{
     prelude::{HpkeCiphertext, LeafNodeIndex, Signable},
 };
 use openmls_traits::{
-    OpenMlsCryptoProvider,
     random::OpenMlsRand,
     types::{HpkeAeadType, HpkeConfig, HpkeKdfType, HpkeKemType},
+    OpenMlsCryptoProvider,
 };
 use tls_codec::{Serialize, TlsSerialize, TlsSize, VLBytes};
 
@@ -14,7 +14,8 @@ use crate::credential::CredentialBundle;
 const PROTOCOL_VERSION: u16 = 1;
 const PADDING_SIZE: usize = 128;
 const PSK_LABEL: &str = "Tnt TargetedMessage Psk v1";
-const SIGN_LABEL: &str = "TntMessageTBS-Persisted-Targeted v1";
+const SIGN_LABEL_PERSISTED: &str = "TntMessageTBS-Persisted-Targeted v1";
+const SIGN_LABEL_TRANSIENT: &str = "TntMessageTBS-Transient-Targeted v1";
 
 #[derive(Clone, Copy, TlsSize, TlsSerialize)]
 #[repr(transparent)]
@@ -25,6 +26,8 @@ struct TntProtocolVersion(u16);
 enum TntMessageBody {
     #[tls_codec(discriminant = 0xF001)]
     Targeted(TargetedMessage),
+    #[tls_codec(discriminant = 0xF002)]
+    TransientTargeted(TargetedMessage),
 }
 
 #[derive(TlsSize, TlsSerialize)]
@@ -41,7 +44,10 @@ impl Signable for TntMessageTbs {
     }
 
     fn label(&self) -> &str {
-        SIGN_LABEL
+        match &self.body {
+            TntMessageBody::Targeted(_) => SIGN_LABEL_PERSISTED,
+            TntMessageBody::TransientTargeted(_) => SIGN_LABEL_TRANSIENT,
+        }
     }
 }
 
@@ -71,7 +77,8 @@ struct TargetedMessageContext {
 
 #[derive(Clone, Copy, TlsSize, TlsSerialize)]
 #[repr(u8)]
-enum TargetedMessagePolicy {
+pub(crate) enum TargetedMessagePolicy {
+    Transient,
     Persisted,
 }
 
@@ -92,12 +99,13 @@ struct TargetedMessage {
     payload: HpkeCiphertext,
 }
 
-pub fn create_targeted_message(
+pub(crate) fn create_targeted_message(
     backend: &impl OpenMlsCryptoProvider,
     credentials: &CredentialBundle,
     group: &MlsGroup,
     counter: u32,
     recipient: u32,
+    policy: TargetedMessagePolicy,
     text: &[u8],
 ) -> Vec<u8> {
     let recipient_index = LeafNodeIndex::new(recipient);
@@ -108,7 +116,7 @@ pub fn create_targeted_message(
     let sender = group.own_leaf_index();
     let context = TargetedMessageContext {
         protocol_version: TntProtocolVersion(PROTOCOL_VERSION),
-        policy: TargetedMessagePolicy::Persisted,
+        policy,
         sender,
         recipient: recipient_index,
         group_context: group.export_group_context().clone(),
@@ -151,7 +159,10 @@ pub fn create_targeted_message(
     };
     let tbs = TntMessageTbs {
         protocol_version: TntProtocolVersion(PROTOCOL_VERSION),
-        body: TntMessageBody::Targeted(targeted),
+        body: match policy {
+            TargetedMessagePolicy::Transient => TntMessageBody::TransientTargeted(targeted),
+            TargetedMessagePolicy::Persisted => TntMessageBody::Targeted(targeted),
+        },
     };
     let signed = tbs.sign(credentials.keys()).unwrap();
     signed.tls_serialize_detached().unwrap()
@@ -198,19 +209,43 @@ fn hpke_seal_psk(
 
     match config {
         HpkeConfig(HpkeKemType::DhKem25519, HpkeKdfType::HkdfSha256, HpkeAeadType::AesGcm128) => {
-            seal!(hpke::aead::AesGcm128, hpke::kdf::HkdfSha256, hpke::kem::X25519HkdfSha256)
+            seal!(
+                hpke::aead::AesGcm128,
+                hpke::kdf::HkdfSha256,
+                hpke::kem::X25519HkdfSha256
+            )
         }
-        HpkeConfig(HpkeKemType::DhKem25519, HpkeKdfType::HkdfSha256, HpkeAeadType::ChaCha20Poly1305) => {
-            seal!(hpke::aead::ChaCha20Poly1305, hpke::kdf::HkdfSha256, hpke::kem::X25519HkdfSha256)
+        HpkeConfig(
+            HpkeKemType::DhKem25519,
+            HpkeKdfType::HkdfSha256,
+            HpkeAeadType::ChaCha20Poly1305,
+        ) => {
+            seal!(
+                hpke::aead::ChaCha20Poly1305,
+                hpke::kdf::HkdfSha256,
+                hpke::kem::X25519HkdfSha256
+            )
         }
         HpkeConfig(HpkeKemType::DhKemP256, HpkeKdfType::HkdfSha256, HpkeAeadType::AesGcm128) => {
-            seal!(hpke::aead::AesGcm128, hpke::kdf::HkdfSha256, hpke::kem::DhP256HkdfSha256)
+            seal!(
+                hpke::aead::AesGcm128,
+                hpke::kdf::HkdfSha256,
+                hpke::kem::DhP256HkdfSha256
+            )
         }
         HpkeConfig(HpkeKemType::DhKemP384, HpkeKdfType::HkdfSha384, HpkeAeadType::AesGcm256) => {
-            seal!(hpke::aead::AesGcm256, hpke::kdf::HkdfSha384, hpke::kem::DhP384HkdfSha384)
+            seal!(
+                hpke::aead::AesGcm256,
+                hpke::kdf::HkdfSha384,
+                hpke::kem::DhP384HkdfSha384
+            )
         }
         HpkeConfig(HpkeKemType::DhKemP521, HpkeKdfType::HkdfSha512, HpkeAeadType::AesGcm256) => {
-            seal!(hpke::aead::AesGcm256, hpke::kdf::HkdfSha512, hpke::kem::DhP521HkdfSha512)
+            seal!(
+                hpke::aead::AesGcm256,
+                hpke::kdf::HkdfSha512,
+                hpke::kem::DhP521HkdfSha512
+            )
         }
         _ => Err(format!("unsupported HPKE configuration: {config:?}")),
     }
