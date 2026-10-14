@@ -92,6 +92,15 @@ enum Command {
         recipient: u32,
         text: String,
     },
+    TransientTargetedMessage {
+        #[clap(short, long)]
+        group_in: String,
+        #[clap(short, long, default_value = "1")]
+        counter: u32,
+        #[clap(short, long)]
+        recipient: u32,
+        text: String,
+    },
     Proposal {
         #[clap(short, long)]
         group_in: String,
@@ -689,6 +698,30 @@ pub async fn run() {
                 &group,
                 counter,
                 recipient,
+                crate::targeted::TargetedMessagePolicy::Persisted,
+                text.as_bytes(),
+            );
+            io::stdout().write_all(&message).unwrap();
+        }
+        Command::TransientTargetedMessage {
+            group_in,
+            counter,
+            recipient,
+            text,
+        } => {
+            let backend = create_backend(cli.store);
+            let credentials = CredentialBundle::read(&backend);
+            let group = {
+                let data = path_reader(&group_in).unwrap();
+                load_group(data)
+            };
+            let message = crate::targeted::create_targeted_message(
+                &backend,
+                &credentials,
+                &group,
+                counter,
+                recipient,
+                crate::targeted::TargetedMessagePolicy::Transient,
                 text.as_bytes(),
             );
             io::stdout().write_all(&message).unwrap();
