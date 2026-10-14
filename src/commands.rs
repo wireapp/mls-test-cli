@@ -101,6 +101,15 @@ enum Command {
         recipient: u32,
         text: String,
     },
+    TransientTargetedMessageBatch {
+        #[clap(short, long)]
+        group_in: String,
+        #[clap(short, long, default_value = "1")]
+        counter: u32,
+        #[clap(short, long, required = true, multiple = true)]
+        recipients: Vec<u32>,
+        text: String,
+    },
     Proposal {
         #[clap(short, long)]
         group_in: String,
@@ -698,6 +707,36 @@ pub async fn run() {
                 text.as_bytes(),
             );
             io::stdout().write_all(&message).unwrap();
+        }
+        Command::TransientTargetedMessageBatch {
+            group_in,
+            counter,
+            recipients,
+            text,
+        } => {
+            let backend = create_backend(cli.store);
+            let credentials = CredentialBundle::read(&backend);
+            let group = {
+                let data = path_reader(&group_in).unwrap();
+                load_group(data)
+            };
+            let mut stdout = io::stdout().lock();
+            for (offset, recipient) in recipients.into_iter().enumerate() {
+                let message_counter = u32::try_from(offset)
+                    .ok()
+                    .and_then(|offset| counter.checked_add(offset))
+                    .expect("targeted message counter overflow");
+                let message = crate::targeted::create_targeted_message(
+                    &backend,
+                    &credentials,
+                    &group,
+                    message_counter,
+                    recipient,
+                    crate::targeted::TargetedMessagePolicy::Transient,
+                    text.as_bytes(),
+                );
+                stdout.write_all(&message).unwrap();
+            }
         }
         Command::Proposal {
             group_in,
