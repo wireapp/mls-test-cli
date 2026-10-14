@@ -62,25 +62,18 @@ impl CredentialBundle {
         handle: Option<String>,
     ) -> Self {
         let ss = ciphersuite.signature_algorithm();
-        let keys = SignatureKeyPair::new(
-            ss,
-            &mut *backend.rand().borrow_rand().unwrap(),
-        )
-        .unwrap();
+        let keys = SignatureKeyPair::new(ss, &mut *backend.rand().borrow_rand().unwrap()).unwrap();
         let credential = match credential_type {
             CredentialType::Basic => Credential::new_basic(client_id.to_vec()),
             CredentialType::X509 => {
                 // generate a self-signed certificate
                 use pkcs8::der::Encode;
-                let cert = generate_certificate_for_scheme(
-                    ss, &keys, client_id, handle,
-                )
-                .to_der()
-                .unwrap();
+                let cert = generate_certificate_for_scheme(ss, &keys, client_id, handle)
+                    .to_der()
+                    .unwrap();
                 {
                     use std::io::Write;
-                    let mut file =
-                        std::fs::File::create("/tmp/cert.crt").unwrap();
+                    let mut file = std::fs::File::create("/tmp/cert.crt").unwrap();
                     file.write_all(&cert).unwrap();
                 }
 
@@ -151,9 +144,8 @@ impl pkcs8::EncodePublicKey for P521VerifyingKey {
 
 impl pkcs8::spki::SignatureAlgorithmIdentifier for Ed25519Signer {
     type Params = der::AnyRef<'static>;
-    const SIGNATURE_ALGORITHM_IDENTIFIER: pkcs8::spki::AlgorithmIdentifier<
-        Self::Params,
-    > = ed25519_dalek::pkcs8::ALGORITHM_ID;
+    const SIGNATURE_ALGORITHM_IDENTIFIER: pkcs8::spki::AlgorithmIdentifier<Self::Params> =
+        ed25519_dalek::pkcs8::ALGORITHM_ID;
 }
 
 impl pkcs8::spki::SignatureAlgorithmIdentifier for P521Signer {
@@ -166,10 +158,7 @@ impl pkcs8::spki::SignatureAlgorithmIdentifier for P521Signer {
 }
 
 impl signature::Signer<Ed25519Signature> for Ed25519Signer {
-    fn try_sign(
-        &self,
-        message: &[u8],
-    ) -> Result<Ed25519Signature, ed25519_dalek::SignatureError> {
+    fn try_sign(&self, message: &[u8]) -> Result<Ed25519Signature, ed25519_dalek::SignatureError> {
         self.0.try_sign(message).map(Ed25519Signature)
     }
 }
@@ -184,9 +173,7 @@ impl signature::Signer<p521::ecdsa::DerSignature> for P521Signer {
 /// A lightweight abstraction to make it possible to uniformly generate certificates for all the
 /// supported signature schemes.
 trait Signer:
-    signature::Signer<Self::Signature>
-    + signature::Keypair
-    + pkcs8::spki::SignatureAlgorithmIdentifier
+    signature::Signer<Self::Signature> + signature::Keypair + pkcs8::spki::SignatureAlgorithmIdentifier
 {
     type Signature: pkcs8::spki::SignatureBitStringEncoding;
     fn from_bytes(key: &[u8]) -> Self;
@@ -256,18 +243,12 @@ fn generate_certificate_for_scheme(
     handle: Option<String>,
 ) -> Certificate {
     match ss {
-        SignatureScheme::ED25519 => {
-            generate_certificate::<Ed25519Signer>(key, client_id, handle)
-        }
+        SignatureScheme::ED25519 => generate_certificate::<Ed25519Signer>(key, client_id, handle),
         SignatureScheme::ECDSA_SECP256R1_SHA256 => {
-            generate_certificate::<p256::ecdsa::SigningKey>(
-                key, client_id, handle,
-            )
+            generate_certificate::<p256::ecdsa::SigningKey>(key, client_id, handle)
         }
         SignatureScheme::ECDSA_SECP384R1_SHA384 => {
-            generate_certificate::<p384::ecdsa::SigningKey>(
-                key, client_id, handle,
-            )
+            generate_certificate::<p384::ecdsa::SigningKey>(key, client_id, handle)
         }
         SignatureScheme::ECDSA_SECP521R1_SHA512 => {
             generate_certificate::<P521Signer>(key, client_id, handle)
@@ -289,25 +270,16 @@ where
         _ => panic!("cannot generate x509 certificate for history client"),
     };
     let serial_number = SerialNumber::from(1u32);
-    let validity =
-        Validity::from_now(Duration::new(3600 * 24 * 365, 0)).unwrap();
+    let validity = Validity::from_now(Duration::new(3600 * 24 * 365, 0)).unwrap();
     let profile = Profile::Root;
     let handle = handle.as_ref().unwrap_or(&regular_client.user);
-    let subject =
-        Name::from_str(&format!("O={},CN={}", regular_client.domain, handle))
-            .unwrap();
+    let subject = Name::from_str(&format!("O={},CN={}", regular_client.domain, handle)).unwrap();
 
     let signer = S::from_bytes(key.private());
     let pub_key = signer.public_key();
-    let mut builder = CertificateBuilder::new(
-        profile,
-        serial_number,
-        validity,
-        subject,
-        pub_key,
-        &signer,
-    )
-    .expect("Create certificate");
+    let mut builder =
+        CertificateBuilder::new(profile, serial_number, validity, subject, pub_key, &signer)
+            .expect("Create certificate");
     let san = regular_client.to_x509(&handle).collect();
     builder.add_extension(&SubjectAltName(san)).unwrap();
     builder.build::<S::Signature>().unwrap()

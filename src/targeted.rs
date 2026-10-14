@@ -3,9 +3,9 @@ use openmls::{
     prelude::{HpkeCiphertext, LeafNodeIndex, Signable},
 };
 use openmls_traits::{
-    OpenMlsCryptoProvider,
     random::OpenMlsRand,
     types::{HpkeAeadType, HpkeConfig, HpkeKdfType, HpkeKemType},
+    OpenMlsCryptoProvider,
 };
 use tls_codec::{Serialize, TlsSerialize, TlsSize, VLBytes};
 
@@ -209,19 +209,43 @@ fn hpke_seal_psk(
 
     match config {
         HpkeConfig(HpkeKemType::DhKem25519, HpkeKdfType::HkdfSha256, HpkeAeadType::AesGcm128) => {
-            seal!(hpke::aead::AesGcm128, hpke::kdf::HkdfSha256, hpke::kem::X25519HkdfSha256)
+            seal!(
+                hpke::aead::AesGcm128,
+                hpke::kdf::HkdfSha256,
+                hpke::kem::X25519HkdfSha256
+            )
         }
-        HpkeConfig(HpkeKemType::DhKem25519, HpkeKdfType::HkdfSha256, HpkeAeadType::ChaCha20Poly1305) => {
-            seal!(hpke::aead::ChaCha20Poly1305, hpke::kdf::HkdfSha256, hpke::kem::X25519HkdfSha256)
+        HpkeConfig(
+            HpkeKemType::DhKem25519,
+            HpkeKdfType::HkdfSha256,
+            HpkeAeadType::ChaCha20Poly1305,
+        ) => {
+            seal!(
+                hpke::aead::ChaCha20Poly1305,
+                hpke::kdf::HkdfSha256,
+                hpke::kem::X25519HkdfSha256
+            )
         }
         HpkeConfig(HpkeKemType::DhKemP256, HpkeKdfType::HkdfSha256, HpkeAeadType::AesGcm128) => {
-            seal!(hpke::aead::AesGcm128, hpke::kdf::HkdfSha256, hpke::kem::DhP256HkdfSha256)
+            seal!(
+                hpke::aead::AesGcm128,
+                hpke::kdf::HkdfSha256,
+                hpke::kem::DhP256HkdfSha256
+            )
         }
         HpkeConfig(HpkeKemType::DhKemP384, HpkeKdfType::HkdfSha384, HpkeAeadType::AesGcm256) => {
-            seal!(hpke::aead::AesGcm256, hpke::kdf::HkdfSha384, hpke::kem::DhP384HkdfSha384)
+            seal!(
+                hpke::aead::AesGcm256,
+                hpke::kdf::HkdfSha384,
+                hpke::kem::DhP384HkdfSha384
+            )
         }
         HpkeConfig(HpkeKemType::DhKemP521, HpkeKdfType::HkdfSha512, HpkeAeadType::AesGcm256) => {
-            seal!(hpke::aead::AesGcm256, hpke::kdf::HkdfSha512, hpke::kem::DhP521HkdfSha512)
+            seal!(
+                hpke::aead::AesGcm256,
+                hpke::kdf::HkdfSha512,
+                hpke::kem::DhP521HkdfSha512
+            )
         }
         _ => Err(format!("unsupported HPKE configuration: {config:?}")),
     }
