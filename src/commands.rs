@@ -83,6 +83,13 @@ enum Command {
         #[clap(short, long, conflicts_with = "group-out")]
         in_place: bool,
     },
+    TransientMessage {
+        #[clap(short, long)]
+        group_in: String,
+        #[clap(short, long, default_value = "1")]
+        counter: u32,
+        text: String,
+    },
     TargetedMessage {
         #[clap(short, long)]
         group_in: String,
@@ -661,6 +668,26 @@ pub async fn run() {
                 let mut writer = fs::File::create(group_out).unwrap();
                 save_group(&group, &mut writer);
             }
+        }
+        Command::TransientMessage {
+            group_in,
+            counter,
+            text,
+        } => {
+            let backend = create_backend(cli.store);
+            let credentials = CredentialBundle::read(&backend);
+            let group = {
+                let data = path_reader(&group_in).unwrap();
+                load_group(data)
+            };
+            let message = crate::transient::create_transient_message(
+                &backend,
+                &credentials,
+                &group,
+                counter,
+                text.as_bytes(),
+            );
+            io::stdout().write_all(&message).unwrap();
         }
         Command::TargetedMessage {
             group_in,
